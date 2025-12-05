@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SYNTHEYE: Portfolio Adventure v1.2</title>
+    <title>SYNTHEYE: Portfolio Adventure v1.1</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- THREE.js CDN -->
@@ -170,7 +170,7 @@
     <div id="main-menu" class="screen flex-col">
         <h1 class="text-4xl sm:text-5xl mb-12 text-center text-white p-4">SYNTHEYE</h1>
         <div class="menu-card p-2">
-            <h2 class="title-bar text-xl text-white mb-2">ACCESS MENU V1.2</h2>
+            <h2 class="title-bar text-xl text-white mb-2">ACCESS MENU V1.1</h2>
             <div id="menu-options" class="divide-y divide-ps1-gray">
                 <div class="menu-item selected" data-action="start" onclick="handleMenuClick(this, 0)">
                     <span class="selection-arrow mr-4" style="visibility: visible;">►</span>
@@ -363,11 +363,6 @@
         // --- 1. CORE CONFIGURATION & CONTENT ---
         // =================================================================================
         
-        // --- CONFIGURATION ---
-        // NOTE: We now load two files for animation support
-        const MODEL_IDLE_PATH = './idle.glb'; 
-        const MODEL_WALK_PATH = './walk.glb';
-
         const STATE = {
             screen: 'main-menu', 
             menuIndex: 0,
@@ -460,17 +455,6 @@
         const body = document.body;
         let renderer, scene, camera, playerMesh, targetMarkerMesh;
         let inspectionCamera, inspectionControls, inspectionScene, inspectionRenderer;
-        
-        // NEW: Animation Globals
-        let mixer; 
-        const clock = new THREE.Clock(); 
-        
-        // ANIMATION STATE VARIABLES
-        let actions = {};
-        let activeAction, previousAction;
-        let isMoving = false;
-        const FADE_DURATION = 0.2; // Smoothness of transition
-
         let controls = { w: false, a: false, s: false, d: false }; 
         let currentRoomGroup = new THREE.Group();
         let collidableMeshes = [];
@@ -607,9 +591,6 @@
             renderer = new THREE.WebGLRenderer({ antialias: false });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio / 2); 
-            // --- SHADOWS ENABLED (BEST PRACTICE) ---
-            renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
             document.getElementById('three-container').appendChild(renderer.domElement);
 
             scene = new THREE.Scene();
@@ -624,68 +605,31 @@
             const playerMaterial = new THREE.MeshLambertMaterial({ color: 0xFF0000 }); 
             playerMesh = new THREE.Mesh(playerGeometry, playerMaterial);
             playerMesh.position.y = 1; 
-            playerMesh.castShadow = true; // Placeholder casts shadow
             scene.add(playerMesh);
 
-            // 2. Load Custom GLB Character (DUAL LOADING STRATEGY)
+            // 2. Load Custom GLB Character
             const loader = new THREE.GLTFLoader();
-            
-            console.log("Attempting to load character parts...");
-
-            // We use Promise.all to ensure we get both files before setting up the character
-            Promise.all([
-                // Load IDLE model (Used for mesh + idle anim)
-                new Promise((resolve) => loader.load(MODEL_IDLE_PATH, resolve, undefined, (e) => resolve(null))),
-                // Load WALK model (Used for walk anim)
-                new Promise((resolve) => loader.load(MODEL_WALK_PATH, resolve, undefined, (e) => resolve(null)))
-            ]).then(([idleGltf, walkGltf]) => {
+            // IMPORTANT: Replace 'path/to/your/character.glb' with the actual path to your file!
+            // Example: 'assets/robot.glb' or 'https://example.com/model.glb'
+            loader.load('./character.glb', function (gltf) {
+                const model = gltf.scene;
                 
-                if (!idleGltf) {
-                    console.error("Critical Error: idle.glb not found.");
-                    return;
-                }
-
-                const model = idleGltf.scene;
+                // Adjust scale if your model is too big/small
+                model.scale.set(1, 1, 1); 
                 
                 // Sync position with current placeholder
                 model.position.copy(playerMesh.position);
                 model.rotation.copy(playerMesh.rotation);
 
-                // --- BEST PRACTICE: MESH TRAVERSAL FOR SHADOWS ---
-                model.traverse(function (node) {
-                    if (node.isMesh) {
-                        node.castShadow = true;
-                        node.receiveShadow = true;
-                    }
-                });
-
-                // --- NEW: ANIMATION SETUP ---
-                mixer = new THREE.AnimationMixer(model);
-
-                // 1. Setup Idle Action
-                if (idleGltf.animations.length > 0) {
-                    const idleClip = idleGltf.animations[0];
-                    actions['Idle'] = mixer.clipAction(idleClip);
-                    actions['Idle'].play(); // Default state
-                    activeAction = actions['Idle'];
-                }
-
-                // 2. Setup Walk Action (from second file)
-                if (walkGltf && walkGltf.animations.length > 0) {
-                    const walkClip = walkGltf.animations[0];
-                    actions['Walk'] = mixer.clipAction(walkClip);
-                } else {
-                    console.warn("Walk animation file missing or empty.");
-                }
-
                 // Remove placeholder and add new model
                 scene.remove(playerMesh);
                 scene.add(model);
-                playerMesh = model; 
+                playerMesh = model; // Update global reference so movement controls work
 
-                console.log("Character loaded successfully with animations!");
+                console.log("Character loaded successfully!");
+            }, undefined, function (error) {
+                console.log("No custom character found (404), keeping placeholder box.");
             });
-
 
             // Target Marker (Destination Ring)
             const ringGeo = new THREE.TorusGeometry(0.5, 0.05, 8, 16);
@@ -695,29 +639,9 @@
             targetMarkerMesh.visible = false;
             scene.add(targetMarkerMesh);
             
-            // --- LIGHTING IMPROVEMENTS ---
-            scene.add(new THREE.AmbientLight(0x404040, 2)); // Softer ambient
-            
-            // Hemisphere light gives a nice sky/ground gradient (BEST PRACTICE for outdoor/rooms)
-            const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x444444, 0.6 );
-            hemiLight.position.set( 0, 20, 0 );
-            scene.add( hemiLight );
-
-            const directionalLight = new THREE.DirectionalLight(0xFFFFFF, 1.5);
+            scene.add(new THREE.AmbientLight(0x404040, 3));
+            const directionalLight = new THREE.DirectionalLight(0xFFFFFF, 2);
             directionalLight.position.set(20, 30, 10);
-            
-            // --- SHADOW CONFIGURATION ---
-            directionalLight.castShadow = true;
-            directionalLight.shadow.mapSize.width = 1024;
-            directionalLight.shadow.mapSize.height = 1024;
-            directionalLight.shadow.camera.near = 0.5;
-            directionalLight.shadow.camera.far = 50;
-            // Widen shadow camera to cover room
-            directionalLight.shadow.camera.left = -20;
-            directionalLight.shadow.camera.right = 20;
-            directionalLight.shadow.camera.top = 20;
-            directionalLight.shadow.camera.bottom = -20;
-            
             scene.add(directionalLight);
 
             window.addEventListener('resize', onWindowResize, false);
@@ -734,19 +658,10 @@
 
                 roomConfig.geometry.forEach(g => {
                     const geo = new THREE.BoxGeometry(g.dim[0], g.dim[1], g.dim[2]);
-                    // Standard material reacts to light better
-                    const mat = new THREE.MeshStandardMaterial({ color: g.color });
+                    const mat = new THREE.MeshLambertMaterial({ color: g.color });
                     const mesh = new THREE.Mesh(geo, mat);
                     mesh.name = g.name; 
                     mesh.position.set(g.pos[0], g.pos[1], g.pos[2]);
-                    
-                    // Enable shadow receiving for floor/walls
-                    mesh.receiveShadow = true;
-                    // Walls cast shadows too
-                    if (g.name !== 'floor') {
-                        mesh.castShadow = true;
-                    }
-
                     roomConfig.group.add(mesh);
                     
                     if (g.collider) {
@@ -856,20 +771,6 @@
             return false;
         }
 
-        function switchAction(name) {
-            const newAction = actions[name];
-            // Don't switch if action doesn't exist or is already active
-            if (!newAction || activeAction === newAction) return;
-
-            previousAction = activeAction;
-            activeAction = newAction;
-
-            if (previousAction) {
-                previousAction.fadeOut(FADE_DURATION);
-            }
-            activeAction.reset().fadeIn(FADE_DURATION).play();
-        }
-
         function updatePlayerMovement() {
             if (STATE.interaction_mode !== 'OVERWORLD') return;
 
@@ -894,7 +795,7 @@
                          handleInteraction(STATE.active_hotspot);
                          STATE.active_hotspot = null;
                     }
-                    return; // Stop function early if arrived
+                    return;
                 }
                 
                 const direction = new THREE.Vector3().subVectors(targetPos, playerPos).setY(0).normalize();
@@ -923,7 +824,6 @@
                 }
             }
             
-            // --- ANIMATION STATE LOGIC ---
             if (moveX !== 0 || moveZ !== 0) {
                 const nextX = playerMesh.position.x + moveX;
                 const nextZ = playerMesh.position.z + moveZ;
@@ -940,16 +840,6 @@
                         playerMesh.position.z = nextZ;
                         STATE.player_pos.z = nextZ;
                     }
-                }
-
-                if (!isMoving) {
-                    isMoving = true;
-                    switchAction('Walk');
-                }
-            } else {
-                if (isMoving) {
-                    isMoving = false;
-                    switchAction('Idle');
                 }
             }
         }
@@ -1215,13 +1105,6 @@
 
         function animate() {
             requestAnimationFrame(animate);
-
-            // --- NEW: Update Animation Mixer ---
-            const delta = clock.getDelta();
-            if (mixer) {
-                mixer.update(delta);
-            }
-            // -----------------------------------
 
             if (STATE.interaction_mode === 'OVERWORLD') {
                 updatePlayerMovement();
