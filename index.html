@@ -3,199 +3,1285 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Character Generator</title>
+    <title>SYNTHEYE: Portfolio Adventure v1.1</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- THREE.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- THREE.js GLTFLoader (REQUIRED FOR CHARACTERS) -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <!-- THREE.js Orbit Controls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Google Fonts for PS1 Vibe -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     
-    <!-- 
-      IMPORT MAP: CRITICAL FOR NETLIFY/PRODUCTION 
-      This ensures 'three' and its addons resolve to the exact same version 
-      to prevent "multiple instances of Three.js" errors.
-    -->
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-            }
-        }
-    </script>
-
     <style>
-        body { margin: 0; overflow: hidden; background-color: #1a1a1a; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        #canvas-container { width: 100vw; height: 100vh; }
-        #ui-layer {
+        /* Retro/PSX Styling */
+        body {
+            background-color: #000;
+            color: #F0F0F0;
+            overflow: hidden; 
+            font-family: 'Press Start 2P', monospace;
+            cursor: default;
+            user-select: none;
+        }
+
+        /* Screen Wrapper */
+        .screen {
             position: absolute;
-            top: 20px;
-            left: 20px;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             z-index: 10;
+        }
+
+        /* Menu Card Styling */
+        .menu-card {
+            background-color: #102048; /* PS1 Blue/Dark */
+            border: 4px solid #F0F0F0;
+            box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.8);
+            width: 90%;
+            max-width: 450px;
+        }
+        .title-bar {
+            background-color: #38508f;
+            padding: 0.5rem 1rem;
+            border-bottom: 2px solid #F0F0F0;
+        }
+        .menu-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            transition: background-color 0.1s;
+        }
+        .menu-item:hover, .menu-item.selected {
+            background-color: #38508f;
+            text-shadow: 1px 1px 0 #000;
+        }
+
+        /* UI Overlay / Prompts */
+        #ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        /* Interaction Prompt */
+        #interaction-prompt {
+            position: absolute;
+            bottom: 5%; 
+            padding: 8px 16px;
+            background-color: #000000;
+            color: #ffffff;
+            border: 2px solid #ff0000;
+            box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.7);
+            animation: pulse 1s infinite alternate;
+            left: 50%;
+            transform: translateX(-50%);
             pointer-events: none;
         }
-        .interactive {
-            pointer-events: auto;
+
+        @keyframes pulse {
+            from { opacity: 0.9; }
+            to { opacity: 1; transform: scale(1.02) translateX(-50%); }
         }
+        
+        /* Transition Overlay (Fade) */
+        #transition-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: black;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            z-index: 100;
+            pointer-events: none;
+        }
+        
+        /* Popup Styling */
+        .popup-card {
+            background-color: #1A4D2E; /* PS1 Green/Dark */
+            border: 4px solid #F0F0F0;
+            box-shadow: 10px 10px 0px rgba(0, 0, 0, 0.8);
+            width: 95%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            font-family: Inter, sans-serif;
+        }
+        .close-button {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            background-color: #ff0000;
+            color: white;
+            border: none;
+            font-family: 'Press Start 2P', monospace;
+            cursor: pointer;
+            box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.5);
+            z-index: 30;
+        }
+        
+        /* Inspection View Specifics */
+        #inspection-view-container {
+            width: 100%;
+            height: 100%;
+            background-color: #111111;
+        }
+        
+        /* CRT Filter */
+        .crt-active:after {
+            content: " ";
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 9999;
+            pointer-events: none;
+            background-size: 100% 4px, 3px 100%;
+            opacity: 0.9;
+        }
+        
     </style>
 </head>
-<body>
+<body class="font-mono bg-black crt-active">
 
-    <div id="ui-layer" class="flex flex-col gap-4">
-        <div class="bg-gray-900/80 text-white p-6 rounded-xl shadow-lg backdrop-blur-sm border border-gray-700 max-w-sm interactive">
-            <h1 class="text-2xl font-bold mb-2 text-blue-400">Model Viewer</h1>
-            <p class="text-gray-300 text-sm mb-4">
-                Attempting to load: <code>character.glb</code><br>
-                <span class="text-xs text-gray-400">If the screen is black, use the button below to manually load your file.</span>
-            </p>
-            <div class="flex flex-col gap-3">
-                <label class="flex items-center justify-center gap-2 w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-[1.02] active:scale-95 shadow-md cursor-pointer">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    Load Local File
-                    <input type="file" id="file-input" accept=".gltf,.glb" class="hidden">
-                </label>
+    <!-- Transition Overlay (Used for Fades and Door Animations) -->
+    <div id="transition-overlay" class="hidden flex-col justify-center items-center">
+        <p id="transition-text" class="text-xl text-white hidden">LOADING...</p>
+    </div>
+
+    <!-- 1. Main Menu Screen -->
+    <div id="main-menu" class="screen flex-col">
+        <h1 class="text-4xl sm:text-5xl mb-12 text-center text-white p-4">SYNTHEYE</h1>
+        <div class="menu-card p-2">
+            <h2 class="title-bar text-xl text-white mb-2">ACCESS MENU V1.1</h2>
+            <div id="menu-options" class="divide-y divide-ps1-gray">
+                <div class="menu-item selected" data-action="start" onclick="handleMenuClick(this, 0)">
+                    <span class="selection-arrow mr-4" style="visibility: visible;">►</span>
+                    <span>START ADVENTURE</span>
+                </div>
+                <div class="menu-item" data-action="options" onclick="handleMenuClick(this, 1)">
+                    <span class="selection-arrow mr-4" style="visibility: hidden;">►</span>
+                    <span>OPTIONS</span>
+                </div>
+                <div class="menu-item" data-action="how-to-play" onclick="handleMenuClick(this, 2)">
+                    <span class="selection-arrow mr-4" style="visibility: hidden;">►</span>
+                    <span>HOW TO PLAY</span>
+                </div>
             </div>
-            <div id="status-msg" class="mt-3 text-xs text-center text-gray-400 h-auto whitespace-pre-wrap">Initializing...</div>
         </div>
     </div>
 
-    <div id="canvas-container"></div>
+    <!-- 2. Overworld UI Screen (Container for 3D) -->
+    <div id="overworld-ui" class="screen hidden flex-col">
+        <div id="three-container" class="w-full h-full absolute">
+            <!-- THREE.js Canvas will be injected here -->
+        </div>
 
-    <script type="module">
-        // Now we import using the clean names defined in the Import Map above
-        import * as THREE from 'three';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-
-        // --- Scene Setup ---
-        const container = document.getElementById('canvas-container');
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x222222);
-        
-        const gridHelper = new THREE.GridHelper(10, 10, 0x444444, 0x333333);
-        scene.add(gridHelper);
-
-        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
-        camera.position.set(2, 2, 4);
-
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.shadowMap.enabled = true;
-        renderer.outputColorSpace = THREE.SRGBColorSpace;
-        container.appendChild(renderer.domElement);
-
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.target.set(0, 1, 0);
-
-        // --- Lighting ---
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
-        scene.add(ambientLight);
-
-        const dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
-        dirLight.position.set(5, 10, 7);
-        dirLight.castShadow = true;
-        scene.add(dirLight);
-
-        // --- Loader Logic ---
-        const loader = new GLTFLoader();
-        let mixer = null;
-        let model = null;
-        const statusMsg = document.getElementById('status-msg');
-
-        function onModelLoaded(gltf) {
-            if (model) scene.remove(model);
-
-            model = gltf.scene;
-            scene.add(model);
-
-            // Auto-center and fit to view
-            const box = new THREE.Box3().setFromObject(model);
-            const center = box.getCenter(new THREE.Vector3());
-            const size = box.getSize(new THREE.Vector3());
+        <!-- UI Overlay for Prompts and Buttons -->
+        <div id="ui-overlay">
+            <!-- Interaction Prompt -->
+            <div id="interaction-prompt" class="absolute bottom-5% p-2 bg-black border border-red-500 hidden text-xs">
+                PRESS [E] / [CLICK] TO INTERACT
+            </div>
             
-            model.position.x += (model.position.x - center.x);
-            model.position.z += (model.position.z - center.z);
-            model.position.y = 0; 
-
-            const maxDim = Math.max(size.x, size.y, size.z);
-            const fov = camera.fov * (Math.PI / 180);
-            let cameraZ = Math.abs(maxDim / 2 * Math.tan(fov * 2)); 
+            <!-- Room Title Display -->
+             <div id="room-title" class="absolute top-4 left-4 text-sm bg-black bg-opacity-70 p-2 rounded-sm border border-gray-500">
+                ROOM: UNKNOWN
+            </div>
             
-            // If the model is tiny or huge, this ensures it's visible
-            if (maxDim > 0) {
-                camera.position.set(cameraZ * 1.5, size.y / 2, cameraZ * 1.5);
-                controls.target.set(0, size.y / 2, 0);
-            }
-            controls.update();
+            <!-- Game Menu Buttons -->
+            <div id="game-menu-buttons" class="absolute bottom-4 right-4 flex space-x-4 pointer-events-auto">
+                <button class="px-4 py-2 bg-gray-700 hover:bg-gray-500 text-white text-xs font-mono rounded-md shadow-lg" onclick="SoundManager.playBlip(); showMenu('options-menu')">[ ESC ] OPTIONS</button>
+                <button class="px-4 py-2 bg-red-800 hover:bg-red-600 text-white text-xs font-mono rounded-md shadow-lg" onclick="SoundManager.playBlip(); returnToMainMenu()">[ M ] MAIN MENU</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 3. Standard Text/Info Popup Screen -->
+    <div id="text-popup" class="screen hidden bg-black bg-opacity-70">
+        <div class="popup-card p-4">
+            <button class="close-button" onclick="SoundManager.playBlip(); closePopup()">[ ESC ] BACK</button>
+            <h2 id="popup-title" class="title-bar text-2xl mb-4 text-white font-mono">TEXT TITLE</h2>
+            <div class="p-2 text-sm text-ps1-light" style="font-family: Inter, sans-serif;">
+                <p id="popup-text" class="whitespace-pre-wrap"></p>
+                <p id="popup-clue-status" class="mt-4 text-yellow-300 font-mono text-xs"></p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 4. Inspection (360° View) Popup Screen -->
+    <div id="inspection-popup" class="screen hidden bg-black bg-opacity-70">
+        <div class="popup-card p-4 flex flex-col items-center">
+            <button class="close-button" onclick="SoundManager.playBlip(); closePopup()">[ ESC ] EXIT INSPECT</button>
+            <h2 id="inspect-title" class="title-bar text-xl mb-2 w-full text-white font-mono">OBJECT INSPECTION</h2>
+            
+            <div class="flex flex-col lg:flex-row w-full h-full min-h-[500px]">
+                <!-- 3D Inspection Area -->
+                <div id="inspection-view-container" class="lg:w-3/4 w-full h-96 lg:h-auto bg-gray-900 border border-gray-700"></div>
+                
+                <!-- Description Panel -->
+                <div class="lg:w-1/4 w-full p-4 bg-gray-800 text-sm font-sans">
+                    <p id="inspect-description" class="text-ps1-light whitespace-pre-wrap"></p>
+                    <p id="inspect-clue-status" class="mt-4 text-red-400 font-mono text-xs"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 5. Options Menu Overlay -->
+    <div id="options-menu" class="screen hidden bg-black bg-opacity-70">
+        <div class="menu-card p-4">
+            <h2 class="title-bar text-xl text-white mb-4">OPTIONS</h2>
+            <div class="space-y-3 text-sm">
+                <div class="flex justify-between items-center border-b border-gray-600 pb-2">
+                    <span>CRT FILTER:</span>
+                    <button id="toggle-crt" class="px-3 py-1 bg-red-600 text-white font-mono" data-setting="on" onclick="SoundManager.playBlip()">ON</button>
+                </div>
+                <button class="w-full mt-4 p-2 bg-gray-500 text-black font-mono shadow-md" onclick="SoundManager.playBlip(); hideMenu('options-menu')">[ B ] BACK</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 6. How To Play Menu -->
+    <div id="how-to-play-menu" class="screen hidden bg-black bg-opacity-70">
+        <div class="menu-card p-4 text-sm font-sans">
+            <h2 class="title-bar text-xl text-white mb-4 font-mono">HOW TO PLAY</h2>
+            <p class="mb-2 font-mono text-xs">MOVEMENT MODES:</p>
+            <ul class="list-disc list-inside ml-4 mb-4 text-xs">
+                <li>**WASD / ARROWS:** Direct movement.</li>
+                <li>**POINT & CLICK:** Click to move. (Watch for the Marker)</li>
+            </ul>
+            <p class="mb-2 font-mono text-xs">INTERACTION:</p>
+            <ul class="list-disc list-inside ml-4 mb-4 text-xs">
+                <li>**KEY [E] / LEFT CLICK:** Interact with hotspots.</li>
+                <li>**INSPECTION:** Drag to rotate items.</li>
+            </ul>
+             <p class="mb-2 font-mono text-xs">GOAL:</p>
+            <p class="mb-4">FIND 3 CLUES TO UNLOCK THE SECRET ROOM.</p>
+            <button class="w-full mt-4 p-2 bg-gray-500 text-black font-mono shadow-md" onclick="SoundManager.playBlip(); hideMenu('how-to-play-menu')">[ B ] BACK</button>
+        </div>
+    </div>
 
-            // Animations
-            if (gltf.animations && gltf.animations.length > 0) {
-                mixer = new THREE.AnimationMixer(model);
-                const action = mixer.clipAction(gltf.animations[0]);
-                action.play();
-                statusMsg.textContent = `Playing: ${gltf.animations[0].name}`;
-            } else {
-                statusMsg.textContent = "Model loaded (Static).";
-            }
-        }
-
-        function onError(error) {
-            console.error(error);
-            statusMsg.innerText = `Error: ${error.message || 'File not found'}\nCheck console/network tab.`;
-        }
-
-        // 1. Automatic Load for Production (Netlify)
-        // Ensure character.glb is in the same public folder as index.html
-        loader.load(
-            './character.glb',
-            onModelLoaded,
-            (xhr) => {
-                const percent = (xhr.loaded / xhr.total * 100).toFixed(0);
-                if(percent < 100 && percent > 0) statusMsg.textContent = `Loading: ${percent}%`;
+    <script>
+        // =================================================================================
+        // --- 0. SOUND MANAGER (WEB AUDIO API - SYNTH ONLY) ---
+        // =================================================================================
+        const SoundManager = {
+            ctx: null,
+            init: function() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
             },
-            (error) => {
-                // If automatic load fails (common in preview or if file missing), prompt user
-                console.warn('Default character.glb not found:', error);
-                statusMsg.textContent = "Default file not found.\nPlease upload your .glb file.";
+            playTone: function(freq, type, duration, vol = 0.1) {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type; // 'sine', 'square', 'sawtooth', 'triangle'
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + duration);
+            },
+            playBlip: function() {
+                this.init();
+                this.playTone(800, 'square', 0.1, 0.05);
+            },
+            playSelect: function() {
+                this.init();
+                this.playTone(400, 'sawtooth', 0.2, 0.1);
+                setTimeout(() => this.playTone(600, 'sawtooth', 0.4, 0.1), 100);
+            },
+            playDoor: function() {
+                this.init();
+                // Simple noise buffer for "creak" effect
+                const bufferSize = this.ctx.sampleRate * 1.5;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const gain = this.ctx.createGain();
+                // Low pass filter to make it rumble
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 200;
+                
+                gain.gain.setValueAtTime(0.5, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 1.5);
+                
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start();
+            },
+            playSuccess: function() {
+                this.init();
+                // Major triad arpeggio
+                const now = this.ctx.currentTime;
+                [440, 554, 659, 880].forEach((freq, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(0.1, now + i * 0.1);
+                    gain.gain.linearRampToValueAtTime(0, now + i * 0.1 + 0.3);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + i * 0.1);
+                    osc.stop(now + i * 0.1 + 0.3);
+                });
             }
-        );
+        };
 
-        // 2. Manual Upload (Fallback)
-        document.getElementById('file-input').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
+        // =================================================================================
+        // --- 1. CORE CONFIGURATION & CONTENT ---
+        // =================================================================================
+        
+        // --- CONFIGURATION ---
+        // EDIT THIS PATH TO MATCH YOUR GITHUB REPO STRUCTURE
+        const CHARACTER_MODEL_PATH = './character.glb'; 
+        
+        // --- SCALE FIX ---
+        // Change this to 100.0 if character is tiny, or 0.01 if character is giant
+        const CHARACTER_SCALE = 1.0; 
 
-            const url = URL.createObjectURL(file);
-            statusMsg.textContent = "Parsing file...";
+        const STATE = {
+            screen: 'main-menu', 
+            menuIndex: 0,
+            isCrtActive: true,
+            current_room: 'ROOM_HALL',
+            interaction_mode: 'OVERWORLD', 
+            player_pos: new THREE.Vector3(0, 1, 0),
+            active_target: null, 
+            active_hotspot: null, 
+            clues_found: [false, false, false], 
+            secret_unlocked: false,
+            speed: 0.15, // Slightly faster
+            move_tolerance: 0.2, 
+        };
+
+        const PORTFOLIO_CONTENT = {
+            clue_clock: { title: 'Clock Note', text: "THE HOUR HAND POINTS TO ONE. NOT ONE O'CLOCK, BUT ONE CLUE.", type: 'puzzle' },
+            clue_painting: { title: 'Etched Symbol', text: "A ROUGHLY CARVED SUN SYMBOL. IT LOOKS LIKE A CLOCK FACE AT 9.", type: 'puzzle' },
+            clue_plaque: { title: 'Archival Date', text: "EARLY DRAFT SUBMITTED ON: 05-02-1998. MAYBE THE MONTH IS IMPORTANT.", type: 'puzzle' },
+            gallery_model1: { title: '3D Character Model', text: "LOW-POLY MODEL FROM A 2024 PROJECT. TEXTURES USE STRICT COLOR PALETTE. CLICK AND DRAG TO ROTATE.", type: 'inspect' },
+            archive_concept: { title: 'Concept Art Case', text: "THIS GLASS CASE CONTAINS EARLY CONCEPT SKETCHES. THE PROCESS WAS MESSY, BUT ESSENTIAL.", type: 'text' },
+            secret_ending: { title: 'Final Revelation', text: "CONGRATULATIONS. YOU HAVE UNLOCKED THE FINAL PIECE.\n\nTHIS IS THE 'ABOUT ME' MONOLOGUE.\n\nMY NAME IS NICHOLAS SIEGEL. THANK YOU FOR EXPLORING MY ADVENTURE.", type: 'text' }
+        };
+        
+        const ROOM_DATA = {
+            ROOM_HALL: {
+                name: 'MAIN HALL',
+                camera: { pos: [10, 8, 8], target: [0, 0, 0] },
+                spawn: new THREE.Vector3(0, 1, 0),
+                geometry: [
+                    { name: 'floor', dim: [20, 0.1, 20], pos: [0, 0, 0], color: 0x654321, collider: false }, 
+                    { name: 'wall_n', dim: [20, 10, 0.5], pos: [0, 5, -10], color: 0x555555, collider: true },
+                    { name: 'wall_s', dim: [20, 10, 0.5], pos: [0, 5, 10], color: 0x555555, collider: true },
+                    { name: 'wall_e', dim: [0.5, 10, 20], pos: [10, 5, 0], color: 0x555555, collider: true },
+                    { name: 'wall_w', dim: [0.5, 10, 20], pos: [-10, 5, 0], color: 0x555555, collider: true },
+                    { name: 'clock', dim: [1, 3, 1], pos: [8, 1.5, -8], color: 0x3d2719, collider: true, hotspot: { type: 'inspect', clue: 0, content_id: 'clue_clock', prompt: 'GRANDFATHER CLOCK' } }
+                ],
+                hotspots: [
+                    { name: 'door_gallery', pos: [0, 1, -10], radius: 2.0, type: 'door', target_room: 'ROOM_GALLERY', target_spawn: new THREE.Vector3(0, 1, 9), prompt: 'GALLERY DOOR' },
+                    { name: 'door_archive', pos: [-10, 1, 0], radius: 2.0, type: 'door', target_room: 'ROOM_ARCHIVE', target_spawn: new THREE.Vector3(9, 1, 0), prompt: 'ARCHIVE DOOR' },
+                    { name: 'door_secret', pos: [10, 1, 0], radius: 2.0, type: 'door', target_room: 'ROOM_SECRET', target_spawn: new THREE.Vector3(-9, 1, 0), locked: true, prompt: 'LOCKED SECRET DOOR' }
+                ],
+            },
+            ROOM_GALLERY: {
+                name: 'GALLERY ROOM',
+                camera: { pos: [-15, 6, 0], target: [0, 0, 0] },
+                spawn: new THREE.Vector3(0, 1, 9),
+                geometry: [
+                    { name: 'floor', dim: [20, 0.1, 20], pos: [0, 0, 0], color: 0x333333, collider: false },
+                    { name: 'pedestal1', dim: [2, 3, 2], pos: [5, 1.5, -5], color: 0xAAAAAA, collider: true, hotspot: { type: 'inspect', content_id: 'gallery_model1', prompt: 'PEDESTAL: WATCHER' } },
+                    { name: 'pedestal2', dim: [2, 3, 2], pos: [5, 1.5, 5], color: 0xAAAAAA, collider: true, hotspot: { type: 'inspect', clue: 1, content_id: 'clue_painting', prompt: 'PEDESTAL: ETCHED ART' } }
+                ],
+                hotspots: [
+                    { name: 'door_hall', pos: [0, 1, 10], radius: 2.0, type: 'door', target_room: 'ROOM_HALL', target_spawn: new THREE.Vector3(0, 1, 9), prompt: 'MAIN HALL DOOR' },
+                ],
+            },
+            ROOM_ARCHIVE: {
+                name: 'MUSEUM ARCHIVE',
+                camera: { pos: [0, 12, -12], target: [0, 0, 0] },
+                spawn: new THREE.Vector3(9, 1, 0),
+                geometry: [
+                    { name: 'floor', dim: [20, 0.1, 20], pos: [0, 0, 0], color: 0x1A4D2E, collider: false },
+                    { name: 'case1', dim: [5, 1.5, 2], pos: [-5, 0.75, 5], color: 0x88AA88, collider: true, hotspot: { type: 'text', content_id: 'archive_concept', prompt: 'CONCEPT ART CASE' } },
+                    { name: 'plaque', dim: [0.1, 1, 1], pos: [-5, 1, -5], color: 0xCDA434, collider: true, hotspot: { type: 'text', clue: 2, content_id: 'clue_plaque', prompt: 'MUSEUM PLAQUE' } }
+                ],
+                hotspots: [
+                    { name: 'door_hall', pos: [-10, 1, 0], radius: 2.0, type: 'door', target_room: 'ROOM_HALL', target_spawn: new THREE.Vector3(-9, 1, 0), prompt: 'MAIN HALL DOOR' },
+                ],
+            },
+            ROOM_SECRET: {
+                name: 'SECRET SANCTUARY',
+                camera: { pos: [5, 5, -5], target: [0, 0, 0] },
+                spawn: new THREE.Vector3(-9, 1, 0),
+                geometry: [
+                    { name: 'floor', dim: [10, 0.1, 10], pos: [0, 0, 0], color: 0x000000, collider: false },
+                    { name: 'wall_final', dim: [0.5, 10, 10], pos: [-5, 5, 0], color: 0x800080, collider: true },
+                    { name: 'final_exhibit', dim: [2, 2, 2], pos: [0, 1, 0], color: 0xFF00FF, collider: true, hotspot: { type: 'text', content_id: 'secret_ending', prompt: 'FINAL MONOLITH' } }
+                ],
+                hotspots: [
+                    { name: 'door_hall', pos: [10, 1, 0], radius: 2.0, type: 'door', target_room: 'ROOM_HALL', target_spawn: new THREE.Vector3(9, 1, 0), prompt: 'EXIT DOOR' },
+                ],
+            }
+        };
+
+        // =================================================================================
+        // --- 2. GLOBAL UTILITY FUNCTIONS ---
+        // =================================================================================
+
+        const menuItems = document.querySelectorAll('#menu-options .menu-item');
+        const body = document.body;
+        let renderer, scene, camera, playerMesh, targetMarkerMesh;
+        let inspectionCamera, inspectionControls, inspectionScene, inspectionRenderer;
+        
+        // NEW: Animation Globals
+        let mixer; // The animation player
+        const clock = new THREE.Clock(); // Tracks time for smooth animation
+
+        let controls = { w: false, a: false, s: false, d: false }; 
+        let currentRoomGroup = new THREE.Group();
+        let collidableMeshes = [];
+        let raycaster = new THREE.Raycaster();
+
+        function setScreen(newScreen) {
+            document.querySelectorAll('.screen').forEach(el => el.classList.add('hidden'));
+            document.getElementById(newScreen).classList.remove('hidden');
             
-            loader.load(
-                url,
-                (gltf) => {
-                    onModelLoaded(gltf);
-                    URL.revokeObjectURL(url);
-                },
-                undefined,
-                onError
-            );
-        });
-
-        // --- Animation Loop ---
-        const clock = new THREE.Clock();
-
-        function animate() {
-            requestAnimationFrame(animate);
-            const delta = clock.getDelta();
-            if (mixer) mixer.update(delta);
-            controls.update();
-            renderer.render(scene, camera);
+            if (newScreen === 'main-menu') {
+                STATE.screen = 'main-menu'; 
+            } else if (newScreen === 'overworld-ui') {
+                STATE.screen = 'overworld';
+                STATE.interaction_mode = 'OVERWORLD'; 
+            } else if (newScreen === 'text-popup' || newScreen === 'inspection-popup') {
+                STATE.screen = 'popup';
+            }
         }
-        animate();
+        
+        function updateMenuSelection() {
+            menuItems.forEach((item, index) => {
+                const isSelected = index === STATE.menuIndex;
+                item.classList.toggle('selected', isSelected);
+                item.querySelector('.selection-arrow').style.visibility = isSelected ? 'visible' : 'hidden';
+            });
+            SoundManager.playBlip();
+        }
+        
+        function handleMenuClick(element, index) {
+            STATE.menuIndex = index;
+            SoundManager.playSelect();
+            updateMenuSelection();
+            handleMenuAction(element.dataset.action);
+        }
 
-        window.addEventListener('resize', () => {
+        function handleMenuAction(action) {
+            if (action === 'start') {
+                startOverworld();
+            } else if (action === 'options') {
+                showMenu('options-menu');
+            } else if (action === 'how-to-play') {
+                showMenu('how-to-play-menu');
+            }
+        }
+        
+        function showMenu(menuId) {
+            document.getElementById(menuId).classList.remove('hidden');
+            STATE.interaction_mode = 'MENU_PAUSE'; 
+            STATE.screen = 'menu-overlay'; 
+        }
+
+        function hideMenu(menuId) {
+            document.getElementById(menuId).classList.add('hidden');
+            if (STATE.interaction_mode === 'MENU_PAUSE') {
+                STATE.interaction_mode = 'OVERWORLD'; 
+                STATE.screen = 'overworld'; 
+            }
+        }
+        
+        function returnToMainMenu() {
+            STATE.clues_found = [false, false, false];
+            STATE.secret_unlocked = false;
+            STATE.current_room = 'ROOM_HALL';
+            STATE.player_pos.set(0, 1, 0); 
+            STATE.active_target = null;
+            STATE.active_hotspot = null;
+            if (currentRoomGroup) {
+                scene.remove(currentRoomGroup);
+                currentRoomGroup = new THREE.Group();
+                collidableMeshes = [];
+            }
+            if (targetMarkerMesh) targetMarkerMesh.visible = false;
+            setScreen('main-menu');
+        }
+
+        function openPopup(content) {
+            SoundManager.playSelect();
+            STATE.active_target = null;
+            if (targetMarkerMesh) targetMarkerMesh.visible = false;
+
+            if (content.type === 'text' || content.type === 'puzzle') {
+                const data = PORTFOLIO_CONTENT[content.content_id];
+                document.getElementById('popup-title').textContent = data.title.toUpperCase();
+                document.getElementById('popup-text').textContent = data.text.toUpperCase();
+                
+                let clueStatus = '';
+                if (content.clue !== undefined) {
+                    setClueFound(content.clue);
+                    clueStatus = STATE.clues_found[content.clue] ? "CLUE LOGGED" : "CLUE FOUND: CHECK LOG";
+                }
+                document.getElementById('popup-clue-status').textContent = clueStatus;
+                
+                setScreen('text-popup');
+                STATE.interaction_mode = 'POPUP_TEXT';
+
+            } else if (content.type === 'inspect') {
+                const data = PORTFOLIO_CONTENT[content.content_id];
+                document.getElementById('inspect-title').textContent = data.title.toUpperCase();
+                document.getElementById('inspect-description').textContent = data.text.toUpperCase();
+                
+                let clueStatus = '';
+                if (content.clue !== undefined) {
+                    setClueFound(content.clue);
+                    clueStatus = STATE.clues_found[content.clue] ? "CLUE LOGGED" : "CLUE FOUND: CHECK LOG";
+                }
+                document.getElementById('inspect-clue-status').textContent = clueStatus;
+
+                setScreen('inspection-popup');
+                STATE.interaction_mode = 'POPUP_INSPECT';
+                startInspectionView(content.content_id);
+            }
+        }
+
+        function closePopup() {
+            stopInspectionView();
+            setScreen('overworld-ui'); 
+        }
+        
+        const toggleCrtButton = document.getElementById('toggle-crt');
+        if (toggleCrtButton) {
+            toggleCrtButton.onclick = () => {
+                SoundManager.playBlip();
+                STATE.isCrtActive = !STATE.isCrtActive;
+                body.classList.toggle('crt-active', STATE.isCrtActive);
+                toggleCrtButton.textContent = STATE.isCrtActive ? 'ON' : 'OFF';
+            };
+        }
+
+        // =================================================================================
+        // --- 3. THREE.JS SCENE AND ROOM MANAGEMENT ---
+        // =================================================================================
+
+        function initThree() {
+            renderer = new THREE.WebGLRenderer({ antialias: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio / 2); 
+            // --- SHADOWS ENABLED (BEST PRACTICE) ---
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
+            document.getElementById('three-container').appendChild(renderer.domElement);
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a0a); 
+            scene.fog = new THREE.Fog(0x111111, 10, 40); 
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+            
+            // --- PLAYER CHARACTER (PLACEHOLDER & GLB LOADER) ---
+            
+            // 1. Create Placeholder (Red Box) so game works immediately
+            const playerGeometry = new THREE.BoxGeometry(1, 2, 1);
+            const playerMaterial = new THREE.MeshLambertMaterial({ color: 0xFF0000 }); 
+            playerMesh = new THREE.Mesh(playerGeometry, playerMaterial);
+            playerMesh.position.y = 1; 
+            playerMesh.castShadow = true; // Placeholder casts shadow
+            scene.add(playerMesh);
+
+            // 2. Load Custom GLB Character
+            const loader = new THREE.GLTFLoader();
+            
+            console.log("Attempting to load character from:", CHARACTER_MODEL_PATH);
+
+            loader.load(CHARACTER_MODEL_PATH, function (gltf) {
+                const model = gltf.scene;
+                
+                // --- APPLIED SCALE FIX HERE ---
+                model.scale.set(CHARACTER_SCALE, CHARACTER_SCALE, CHARACTER_SCALE);
+                
+                // Sync position with current placeholder
+                model.position.copy(playerMesh.position);
+                model.rotation.copy(playerMesh.rotation);
+
+                // --- BEST PRACTICE: MESH TRAVERSAL FOR SHADOWS ---
+                model.traverse(function (node) {
+                    if (node.isMesh) {
+                        node.castShadow = true;
+                        node.receiveShadow = true;
+                    }
+                });
+
+                // --- NEW: ANIMATION SETUP ---
+                if (gltf.animations && gltf.animations.length > 0) {
+                    mixer = new THREE.AnimationMixer(model);
+                    
+                    // Try to find an animation named 'Idle' or 'Walk', otherwise play the first one
+                    const clip = THREE.AnimationClip.findByName(gltf.animations, 'Idle') || gltf.animations[0];
+                    
+                    if (clip) {
+                        const action = mixer.clipAction(clip);
+                        action.play();
+                    }
+                }
+                // ---------------------------
+
+                // Remove placeholder and add new model
+                scene.remove(playerMesh);
+                scene.add(model);
+                playerMesh = model; 
+
+                console.log("Character loaded successfully!");
+            }, undefined, function (error) {
+                console.error("Error loading character:", error);
+                console.log("Using placeholder box instead.");
+            });
+
+            // Target Marker (Destination Ring)
+            const ringGeo = new THREE.TorusGeometry(0.5, 0.05, 8, 16);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0x00FF00, transparent: true, opacity: 0.8 });
+            targetMarkerMesh = new THREE.Mesh(ringGeo, ringMat);
+            targetMarkerMesh.rotation.x = -Math.PI / 2;
+            targetMarkerMesh.visible = false;
+            scene.add(targetMarkerMesh);
+            
+            // --- LIGHTING IMPROVEMENTS ---
+            scene.add(new THREE.AmbientLight(0x404040, 2)); // Softer ambient
+            
+            // Hemisphere light gives a nice sky/ground gradient (BEST PRACTICE for outdoor/rooms)
+            const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x444444, 0.6 );
+            hemiLight.position.set( 0, 20, 0 );
+            scene.add( hemiLight );
+
+            const directionalLight = new THREE.DirectionalLight(0xFFFFFF, 1.5);
+            directionalLight.position.set(20, 30, 10);
+            
+            // --- SHADOW CONFIGURATION ---
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 1024;
+            directionalLight.shadow.mapSize.height = 1024;
+            directionalLight.shadow.camera.near = 0.5;
+            directionalLight.shadow.camera.far = 50;
+            // Widen shadow camera to cover room
+            directionalLight.shadow.camera.left = -20;
+            directionalLight.shadow.camera.right = 20;
+            directionalLight.shadow.camera.top = 20;
+            directionalLight.shadow.camera.bottom = -20;
+            
+            scene.add(directionalLight);
+
+            window.addEventListener('resize', onWindowResize, false);
+            document.getElementById('three-container').addEventListener('mousedown', handleMouseDown);
+            
+            loadAllRooms();
+        }
+
+        function loadAllRooms() {
+            for (const key in ROOM_DATA) {
+                const roomConfig = ROOM_DATA[key];
+                roomConfig.group = new THREE.Group();
+                roomConfig.colliders = []; 
+
+                roomConfig.geometry.forEach(g => {
+                    const geo = new THREE.BoxGeometry(g.dim[0], g.dim[1], g.dim[2]);
+                    // Standard material reacts to light better
+                    const mat = new THREE.MeshStandardMaterial({ color: g.color });
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.name = g.name; 
+                    mesh.position.set(g.pos[0], g.pos[1], g.pos[2]);
+                    
+                    // Enable shadow receiving for floor/walls
+                    mesh.receiveShadow = true;
+                    // Walls cast shadows too
+                    if (g.name !== 'floor') {
+                        mesh.castShadow = true;
+                    }
+
+                    roomConfig.group.add(mesh);
+                    
+                    if (g.collider) {
+                        roomConfig.colliders.push({ 
+                            pos: mesh.position, 
+                            dim: new THREE.Vector3(g.dim[0], g.dim[1], g.dim[2]) 
+                        });
+                    }
+                    if (g.hotspot) {
+                        mesh.userData.hotspot = g.hotspot;
+                        mesh.userData.isMeshHotspot = true; 
+                    }
+                });
+
+                roomConfig.hotspots.forEach(h => {
+                    const hotspotGeo = new THREE.CylinderGeometry(0.5, 0.5, 2, 8);
+                    const hotspotMat = new THREE.MeshBasicMaterial({ color: h.locked ? 0xFF0000 : 0x00FF00, transparent: true, opacity: 0.5 });
+                    const mesh = new THREE.Mesh(hotspotGeo, hotspotMat);
+                    mesh.position.set(h.pos.x, 1, h.pos.z);
+                    mesh.userData.hotspot = h;
+                    mesh.userData.isHotspot = true; 
+                    roomConfig.group.add(mesh);
+                });
+            }
+        }
+        
+        function setRoom(roomKey, spawnPoint = null) {
+            if (currentRoomGroup) scene.remove(currentRoomGroup);
+            
+            const roomConfig = ROOM_DATA[roomKey];
+            currentRoomGroup = roomConfig.group;
+            collidableMeshes = roomConfig.colliders; 
+            scene.add(currentRoomGroup);
+            
+            camera.position.set(...roomConfig.camera.pos);
+            camera.lookAt(...roomConfig.camera.target);
+            
+            STATE.current_room = roomKey;
+            const newPos = spawnPoint || roomConfig.spawn;
+            playerMesh.position.copy(newPos);
+            STATE.player_pos.copy(newPos);
+            
+            if (targetMarkerMesh) targetMarkerMesh.visible = false;
+            
+            document.getElementById('room-title').textContent = `ROOM: ${roomConfig.name.toUpperCase()}`;
+        }
+        
+        function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio / 2);
+        }
+        
+        function startTransition(targetRoomKey, targetSpawn) {
+            if (STATE.interaction_mode !== 'OVERWORLD') return;
+            SoundManager.playDoor();
+            STATE.interaction_mode = 'TRANSITION';
+            STATE.active_target = null;
+            if (targetMarkerMesh) targetMarkerMesh.visible = false;
+            
+            const overlay = document.getElementById('transition-overlay');
+            overlay.classList.remove('hidden');
+            document.getElementById('transition-text').classList.remove('hidden');
+
+            setTimeout(() => {
+                overlay.style.opacity = 1;
+            }, 50); 
+            
+            setTimeout(() => {
+                document.getElementById('transition-text').textContent = '...DOOR CREAKING...';
+                setRoom(targetRoomKey, targetSpawn);
+            }, 550); 
+            
+            setTimeout(() => {
+                document.getElementById('transition-text').classList.add('hidden');
+                overlay.style.opacity = 0;
+                STATE.interaction_mode = 'OVERWORLD';
+                updateSecretDoorState();
+                setTimeout(() => {
+                    overlay.classList.add('hidden');
+                }, 500);
+            }, 2000); 
+        }
+
+        // =================================================================================
+        // --- 4. MOVEMENT & COLLISION ---
+        // =================================================================================
+
+        function checkCollision(nextX, nextZ) {
+            const playerMinX = nextX - 0.5;
+            const playerMaxX = nextX + 0.5;
+            const playerMinZ = nextZ - 0.5;
+            const playerMaxZ = nextZ + 0.5;
+
+            for (const collider of collidableMeshes) {
+                const cMinX = collider.pos.x - collider.dim.x / 2;
+                const cMaxX = collider.pos.x + collider.dim.x / 2;
+                const cMinZ = collider.pos.z - collider.dim.z / 2;
+                const cMaxZ = collider.pos.z + collider.dim.z / 2;
+                
+                if (playerMaxX > cMinX && playerMinX < cMaxX &&
+                    playerMaxZ > cMinZ && playerMinZ < cMaxZ) {
+                    return true; 
+                }
+            }
+            return false;
+        }
+
+        function updatePlayerMovement() {
+            if (STATE.interaction_mode !== 'OVERWORLD') return;
+
+            let moveX = 0;
+            let moveZ = 0;
+            const cameraYaw = Math.atan2(camera.position.x - playerMesh.position.x, camera.position.z - playerMesh.position.z);
+            
+            if (STATE.active_target) {
+                const targetPos = STATE.active_target;
+                const playerPos = playerMesh.position;
+                
+                // Update marker visual
+                targetMarkerMesh.visible = true;
+                targetMarkerMesh.position.set(targetPos.x, 0.1, targetPos.z);
+                targetMarkerMesh.rotation.z += 0.05;
+
+                const distance = playerPos.distanceTo(targetPos);
+                if (distance < STATE.move_tolerance) {
+                    STATE.active_target = null; 
+                    targetMarkerMesh.visible = false;
+                    if (STATE.active_hotspot && STATE.active_hotspot.trigger_on_reach) {
+                         handleInteraction(STATE.active_hotspot);
+                         STATE.active_hotspot = null;
+                    }
+                    return;
+                }
+                
+                const direction = new THREE.Vector3().subVectors(targetPos, playerPos).setY(0).normalize();
+                moveX = direction.x * STATE.speed;
+                moveZ = direction.z * STATE.speed;
+                playerMesh.rotation.y = Math.atan2(direction.x, direction.z); 
+            } 
+            else if (controls.w || controls.s || controls.a || controls.d) {
+                targetMarkerMesh.visible = false;
+                const forwardFactor = controls.w ? 1 : controls.s ? -1 : 0;
+                const strafeFactor = controls.a ? 1 : controls.d ? -1 : 0;
+                const forwardAngle = cameraYaw + Math.PI; 
+                let movementVector = new THREE.Vector2(0, 0);
+
+                movementVector.x += forwardFactor * Math.sin(forwardAngle);
+                movementVector.y += forwardFactor * Math.cos(forwardAngle);
+                movementVector.x += strafeFactor * Math.sin(forwardAngle + Math.PI / 2);
+                movementVector.y += strafeFactor * Math.cos(forwardAngle + Math.PI / 2);
+                
+                movementVector.normalize().multiplyScalar(STATE.speed);
+                moveX = movementVector.x;
+                moveZ = movementVector.y;
+                
+                if (movementVector.lengthSq() > 0) {
+                     playerMesh.rotation.y = Math.atan2(movementVector.x, movementVector.y);
+                }
+            }
+            
+            if (moveX !== 0 || moveZ !== 0) {
+                const nextX = playerMesh.position.x + moveX;
+                const nextZ = playerMesh.position.z + moveZ;
+                
+                if (!checkCollision(nextX, nextZ)) {
+                    playerMesh.position.x = nextX;
+                    playerMesh.position.z = nextZ;
+                    STATE.player_pos.set(nextX, playerMesh.position.y, nextZ);
+                } else {
+                    if (!checkCollision(nextX, playerMesh.position.z)) {
+                        playerMesh.position.x = nextX;
+                        STATE.player_pos.x = nextX;
+                    } else if (!checkCollision(playerMesh.position.x, nextZ)) {
+                        playerMesh.position.z = nextZ;
+                        STATE.player_pos.z = nextZ;
+                    }
+                }
+            }
+        }
+
+        // =================================================================================
+        // --- 5. INTERACTION HANDLERS ---
+        // =================================================================================
+
+        function handleMouseDown(event) {
+            SoundManager.init(); // Ensure audio context starts
+            if (STATE.interaction_mode !== 'OVERWORLD') return;
+            
+            const rect = document.getElementById('three-container').getBoundingClientRect();
+            const pointer = new THREE.Vector2(
+                (event.clientX - rect.left) / rect.width * 2 - 1,
+                -((event.clientY - rect.top) / rect.height) * 2 + 1
+            );
+            
+            raycaster.setFromCamera(pointer, camera);
+            const interactiveMeshes = currentRoomGroup.children.filter(c => c.userData.isMeshHotspot || c.userData.isHotspot);
+            const intersects = raycaster.intersectObjects(interactiveMeshes, false);
+            
+            let clickedHotspot = null;
+            if (intersects.length > 0) {
+                for (const intersect of intersects) {
+                    if (intersect.object.userData.hotspot) {
+                        clickedHotspot = intersect.object.userData.hotspot;
+                        break;
+                    }
+                }
+            }
+
+            if (clickedHotspot) {
+                SoundManager.playBlip();
+                const targetPos = new THREE.Vector3().copy(clickedHotspot.pos || clickedHotspot.position);
+                const interactionPoint = targetPos.clone();
+                interactionPoint.setY(STATE.player_pos.y);
+                
+                // Offset calculation
+                const camAngle = Math.atan2(camera.position.x - targetPos.x, camera.position.z - targetPos.z);
+                interactionPoint.x += 2 * Math.sin(camAngle);
+                interactionPoint.z += 2 * Math.cos(camAngle);
+                
+                STATE.active_target = interactionPoint;
+                STATE.active_hotspot = { ...clickedHotspot, trigger_on_reach: true }; 
+                
+            } else {
+                const floorMesh = currentRoomGroup.children.find(c => c.name === 'floor');
+                if (floorMesh) {
+                    const floorIntersects = raycaster.intersectObjects([floorMesh], false); 
+                    if (floorIntersects.length > 0) {
+                        const target = floorIntersects[0].point.clone();
+                        target.y = STATE.player_pos.y;
+                        STATE.active_target = target;
+                        STATE.active_hotspot = null; 
+                        
+                        // Audio Feedback for movement click
+                        SoundManager.playTone(200, 'triangle', 0.05, 0.05);
+                    }
+                }
+            }
+        }
+        
+        function checkHotspots() {
+            if (STATE.interaction_mode !== 'OVERWORLD') {
+                document.getElementById('interaction-prompt').classList.add('hidden');
+                STATE.active_hotspot = null;
+                return;
+            }
+
+            const roomConfig = ROOM_DATA[STATE.current_room];
+            let interactionPossible = false;
+            let closestHotspot = null;
+            let closestDistanceSq = Infinity;
+
+            for (const hotspot of roomConfig.hotspots) {
+                const dx = STATE.player_pos.x - hotspot.pos.x;
+                const dz = STATE.player_pos.z - hotspot.pos.z;
+                const distanceSq = dx * dx + dz * dz;
+
+                if (distanceSq < hotspot.radius * hotspot.radius) { 
+                    if (distanceSq < closestDistanceSq) {
+                        closestHotspot = hotspot;
+                        closestDistanceSq = distanceSq;
+                        interactionPossible = true;
+                    }
+                }
+            }
+            
+            for (const geo of roomConfig.geometry) {
+                if (geo.hotspot) {
+                    const dx = STATE.player_pos.x - geo.pos[0];
+                    const dz = STATE.player_pos.z - geo.pos[2];
+                    const distanceSq = dx * dx + dz * dz;
+                    if (distanceSq < 2.5 * 2.5) { 
+                          if (distanceSq < closestDistanceSq) {
+                            closestHotspot = geo.hotspot;
+                            closestHotspot.pos = new THREE.Vector3(...geo.pos); 
+                            closestDistanceSq = distanceSq;
+                            interactionPossible = true;
+                        }
+                    }
+                }
+            }
+
+            if (interactionPossible && closestHotspot) {
+                STATE.active_hotspot = closestHotspot;
+                document.getElementById('interaction-prompt').textContent = `[ ! ] PRESS [E] / [CLICK] TO ENGAGE: ${closestHotspot.prompt.toUpperCase()}`;
+                
+                if (closestHotspot.locked && !STATE.secret_unlocked) {
+                    document.getElementById('interaction-prompt').textContent = `[ ! ] DOOR LOCKED - REQUIRES KEY ITEM`;
+                }
+                document.getElementById('interaction-prompt').classList.remove('hidden');
+            } else {
+                document.getElementById('interaction-prompt').classList.add('hidden');
+                STATE.active_hotspot = null;
+            }
+        }
+
+        function handleEInteraction() {
+            if (STATE.active_hotspot && STATE.interaction_mode === 'OVERWORLD') {
+                const hotspot = STATE.active_hotspot;
+                if (hotspot.type === 'door') {
+                    if (hotspot.locked && !STATE.secret_unlocked) {
+                        SoundManager.playBlip(); // Deny sound
+                        return; 
+                    }
+                    startTransition(hotspot.target_room, hotspot.target_spawn);
+                } else if (hotspot.type === 'text' || hotspot.type === 'inspect') {
+                    openPopup(hotspot);
+                }
+            }
+        }
+
+        // =================================================================================
+        // --- 6. INSPECTION VIEW (360° Object View) ---
+        // =================================================================================
+
+        let inspectionObject;
+        
+        function setupInspectionView() {
+            inspectionRenderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
+            inspectionRenderer.setPixelRatio(window.devicePixelRatio / 2);
+            inspectionScene = new THREE.Scene();
+            inspectionCamera = new THREE.PerspectiveCamera(50, 1, 0.1, 10);
+            inspectionCamera.position.z = 5;
+
+            inspectionScene.add(new THREE.AmbientLight(0xFFFFFF, 0.5));
+            const pointLight = new THREE.PointLight(0xFFFFFF, 2);
+            pointLight.position.set(5, 5, 5);
+            inspectionScene.add(pointLight);
+
+            const container = document.getElementById('inspection-view-container');
+            container.appendChild(inspectionRenderer.domElement);
+            
+            inspectionControls = new THREE.OrbitControls(inspectionCamera, inspectionRenderer.domElement);
+            inspectionControls.enableDamping = true;
+            inspectionControls.minDistance = 2;
+            inspectionControls.maxDistance = 6;
+            inspectionControls.screenSpacePanning = false;
+
+            function resizeInspection() {
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+                inspectionCamera.aspect = width / height;
+                inspectionCamera.updateProjectionMatrix();
+                inspectionRenderer.setSize(width, height);
+            }
+            resizeInspection();
+            container.resizeHandler = resizeInspection; 
+            window.addEventListener('resize', resizeInspection, false);
+        }
+
+        function startInspectionView(contentId) {
+            const container = document.getElementById('inspection-view-container');
+            if (container.resizeHandler) container.resizeHandler();
+
+            if (inspectionObject) inspectionScene.remove(inspectionObject);
+
+            let geo, mat;
+            if (contentId === 'gallery_model1') {
+                geo = new THREE.DodecahedronGeometry(1);
+                mat = new THREE.MeshBasicMaterial({ color: 0x00FF00, wireframe: true });
+            } else {
+                geo = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+                mat = new THREE.MeshLambertMaterial({ color: 0xFF0000 });
+            }
+            
+            inspectionObject = new THREE.Mesh(geo, mat);
+            inspectionScene.add(inspectionObject);
+            
+            inspectionCamera.position.z = 3;
+            inspectionControls.update();
+        }
+
+        function stopInspectionView() {
+            if (inspectionObject) {
+                inspectionScene.remove(inspectionObject);
+                inspectionObject = null;
+            }
+        }
+        
+        function animateInspection() {
+             if (STATE.interaction_mode === 'POPUP_INSPECT') {
+                requestAnimationFrame(animateInspection);
+                inspectionControls.update();
+                if (inspectionRenderer && inspectionScene && inspectionCamera) {
+                    inspectionRenderer.render(inspectionScene, inspectionCamera);
+                }
+            } 
+        }
+
+        // =================================================================================
+        // --- 7. PUZZLE LOGIC ---
+        // =================================================================================
+        
+        function setClueFound(index) {
+            if (!STATE.clues_found[index]) {
+                STATE.clues_found[index] = true;
+                SoundManager.playSelect(); // Clue found sound
+                
+                if (STATE.clues_found.every(c => c === true)) {
+                    unlockSecretDoor();
+                }
+            }
+        }
+
+        function unlockSecretDoor() {
+            if (!STATE.secret_unlocked) {
+                STATE.secret_unlocked = true;
+                setTimeout(() => SoundManager.playSuccess(), 500); 
+                updateSecretDoorState();
+            }
+        }
+        
+        function updateSecretDoorState() {
+            const roomHall = ROOM_DATA.ROOM_HALL;
+            const secretDoorHotspot = roomHall.hotspots.find(h => h.name === 'door_secret');
+            const secretDoorMesh = roomHall.group.children.find(c => c.userData.isHotspot && c.userData.hotspot.name === 'door_secret');
+
+            if (secretDoorHotspot && secretDoorMesh) {
+                if (STATE.secret_unlocked) {
+                    secretDoorHotspot.locked = false;
+                    secretDoorHotspot.prompt = 'UNLOCKED SECRET DOOR';
+                    secretDoorMesh.material.color.set(0x00FF00); 
+                } else {
+                    secretDoorHotspot.locked = true;
+                    secretDoorMesh.material.color.set(0xFF0000); 
+                }
+            }
+        }
+
+        // =================================================================================
+        // --- 8. MAIN GAME LOOP ---
+        // =================================================================================
+
+        function startOverworld() {
+            setScreen('overworld-ui');
+            setRoom(STATE.current_room, STATE.player_pos);
+            updateSecretDoorState(); 
+            animateInspection(); 
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // --- NEW: Update Animation Mixer ---
+            const delta = clock.getDelta();
+            if (mixer) {
+                mixer.update(delta);
+            }
+            // -----------------------------------
+
+            if (STATE.interaction_mode === 'OVERWORLD') {
+                updatePlayerMovement();
+                checkHotspots();
+            }
+
+            if (renderer && scene && camera) {
+                renderer.render(scene, camera);
+            }
+        }
+
+        // --- EVENT HANDLERS ---
+        document.addEventListener('keydown', (event) => {
+            if (STATE.screen === 'main-menu') {
+                switch (event.key) {
+                    case 'ArrowUp':
+                    case 'w':
+                        event.preventDefault(); 
+                        STATE.menuIndex = (STATE.menuIndex - 1 + menuItems.length) % menuItems.length;
+                        updateMenuSelection();
+                        break;
+                    case 'ArrowDown':
+                    case 's':
+                        event.preventDefault(); 
+                        STATE.menuIndex = (STATE.menuIndex + 1) % menuItems.length;
+                        updateMenuSelection();
+                        break;
+                    case 'Enter':
+                    case ' ':
+                        event.preventDefault();
+                        SoundManager.playSelect();
+                        handleMenuAction(menuItems[STATE.menuIndex].dataset.action);
+                        break;
+                }
+            } 
+            else if (STATE.interaction_mode === 'OVERWORLD') {
+                if (['w','s','a','d','arrowup','arrowdown','arrowleft','arrowright'].includes(event.key.toLowerCase())) {
+                    STATE.active_target = null;
+                    if(targetMarkerMesh) targetMarkerMesh.visible = false;
+                }
+                
+                switch (event.key.toLowerCase()) {
+                    case 'w': controls.w = true; break;
+                    case 's': controls.s = true; break;
+                    case 'a': controls.a = true; break;
+                    case 'd': controls.d = true; break;
+                    case 'arrowup': controls.w = true; break;
+                    case 'arrowdown': controls.s = true; break;
+                    case 'arrowleft': controls.a = true; break; 
+                    case 'arrowright': controls.d = true; break; 
+                    case 'e':
+                    case ' ':
+                        handleEInteraction();
+                        break;
+                    case 'escape':
+                        SoundManager.playBlip();
+                        showMenu('options-menu'); 
+                        break;
+                    case 'm':
+                        SoundManager.playBlip();
+                        returnToMainMenu();
+                        break;
+                }
+            } 
+            else if (event.key === 'Escape') {
+                event.preventDefault();
+                SoundManager.playBlip();
+                if (STATE.interaction_mode === 'POPUP_TEXT' || STATE.interaction_mode === 'POPUP_INSPECT') {
+                    closePopup(); 
+                } else if (STATE.interaction_mode === 'MENU_PAUSE') {
+                    if (!document.getElementById('options-menu').classList.contains('hidden')) {
+                        hideMenu('options-menu');
+                    }
+                    if (!document.getElementById('how-to-play-menu').classList.contains('hidden')) {
+                         hideMenu('how-to-play-menu'); 
+                    }
+                }
+            }
         });
+
+        document.addEventListener('keyup', (event) => {
+            if (STATE.interaction_mode === 'OVERWORLD') {
+                switch (event.key.toLowerCase()) {
+                    case 'w': controls.w = false; break;
+                    case 's': controls.s = false; break;
+                    case 'a': controls.a = false; break;
+                    case 'd': controls.d = false; break;
+                    case 'arrowup': controls.w = false; break;
+                    case 'arrowdown': controls.s = false; break;
+                    case 'arrowleft': controls.a = false; break;
+                    case 'arrowright': controls.d = false; break;
+                }
+            }
+        });
+
+        window.onload = () => {
+            setupInspectionView(); 
+            initThree(); 
+            animate(); 
+        };
     </script>
 </body>
 </html>
