@@ -367,10 +367,6 @@
         // NOTE: We now load two files for animation support
         const MODEL_IDLE_PATH = './idle.glb'; 
         const MODEL_WALK_PATH = './walk.glb';
-        
-        // --- SCALE FIX ---
-        // Change this to 100.0 if character is tiny, or 0.01 if character is giant
-        const CHARACTER_SCALE = 1.0; 
 
         const STATE = {
             screen: 'main-menu', 
@@ -650,9 +646,6 @@
                 }
 
                 const model = idleGltf.scene;
-                
-                // --- APPLIED SCALE FIX HERE ---
-                model.scale.set(CHARACTER_SCALE, CHARACTER_SCALE, CHARACTER_SCALE);
                 
                 // Sync position with current placeholder
                 model.position.copy(playerMesh.position);
