@@ -5,6 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3D Character Generator</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 
+      IMPORT MAP: CRITICAL FOR NETLIFY/PRODUCTION 
+      This ensures 'three' and its addons resolve to the exact same version 
+      to prevent "multiple instances of Three.js" errors.
+    -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
     <style>
         body { margin: 0; overflow: hidden; background-color: #1a1a1a; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         #canvas-container { width: 100vw; height: 100vh; }
@@ -13,7 +28,7 @@
             top: 20px;
             left: 20px;
             z-index: 10;
-            pointer-events: none; /* Let clicks pass through to canvas where no buttons exist */
+            pointer-events: none;
         }
         .interactive {
             pointer-events: auto;
@@ -26,8 +41,8 @@
         <div class="bg-gray-900/80 text-white p-6 rounded-xl shadow-lg backdrop-blur-sm border border-gray-700 max-w-sm interactive">
             <h1 class="text-2xl font-bold mb-2 text-blue-400">Model Viewer</h1>
             <p class="text-gray-300 text-sm mb-4">
-                Loading <code>character.glb</code>...<br>
-                <span class="text-xs text-gray-400">If the file isn't found (because this is a web preview), use the button below to load your local file.</span>
+                Attempting to load: <code>character.glb</code><br>
+                <span class="text-xs text-gray-400">If the screen is black, use the button below to manually load your file.</span>
             </p>
             <div class="flex flex-col gap-3">
                 <label class="flex items-center justify-center gap-2 w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-[1.02] active:scale-95 shadow-md cursor-pointer">
@@ -38,23 +53,23 @@
                     <input type="file" id="file-input" accept=".gltf,.glb" class="hidden">
                 </label>
             </div>
-            <div id="status-msg" class="mt-3 text-xs text-center text-gray-400 h-4">Waiting for model...</div>
+            <div id="status-msg" class="mt-3 text-xs text-center text-gray-400 h-auto whitespace-pre-wrap">Initializing...</div>
         </div>
     </div>
 
     <div id="canvas-container"></div>
 
     <script type="module">
-        import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
-        import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
-        import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+        // Now we import using the clean names defined in the Import Map above
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
         // --- Scene Setup ---
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x222222);
         
-        // Add a grid helper
         const gridHelper = new THREE.GridHelper(10, 10, 0x444444, 0x333333);
         scene.add(gridHelper);
 
@@ -65,7 +80,7 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.shadowMap.enabled = true;
-        renderer.outputColorSpace = THREE.SRGBColorSpace; // Important for GLTF colors
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
         container.appendChild(renderer.domElement);
 
         const controls = new OrbitControls(camera, renderer.domElement);
@@ -73,7 +88,7 @@
         controls.target.set(0, 1, 0);
 
         // --- Lighting ---
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.0); // Brighter for models
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
         scene.add(ambientLight);
 
         const dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
@@ -87,78 +102,80 @@
         let model = null;
         const statusMsg = document.getElementById('status-msg');
 
-        // Function to handle the loaded model
         function onModelLoaded(gltf) {
-            // Remove previous model if exists
             if (model) scene.remove(model);
 
             model = gltf.scene;
             scene.add(model);
 
-            // Center the model
+            // Auto-center and fit to view
             const box = new THREE.Box3().setFromObject(model);
             const center = box.getCenter(new THREE.Vector3());
             const size = box.getSize(new THREE.Vector3());
             
-            // Auto-center and place on floor
             model.position.x += (model.position.x - center.x);
             model.position.z += (model.position.z - center.z);
-            model.position.y = 0; // Assume feet are at 0 local y
+            model.position.y = 0; 
 
-            // Adjust camera to fit model
             const maxDim = Math.max(size.x, size.y, size.z);
             const fov = camera.fov * (Math.PI / 180);
             let cameraZ = Math.abs(maxDim / 2 * Math.tan(fov * 2)); 
-            camera.position.set(cameraZ * 1.5, size.y / 2, cameraZ * 1.5);
-            controls.target.set(0, size.y / 2, 0);
+            
+            // If the model is tiny or huge, this ensures it's visible
+            if (maxDim > 0) {
+                camera.position.set(cameraZ * 1.5, size.y / 2, cameraZ * 1.5);
+                controls.target.set(0, size.y / 2, 0);
+            }
             controls.update();
 
-            // Handle Animations (Rigging)
+            // Animations
             if (gltf.animations && gltf.animations.length > 0) {
                 mixer = new THREE.AnimationMixer(model);
                 const action = mixer.clipAction(gltf.animations[0]);
                 action.play();
-                statusMsg.textContent = `Playing animation: ${gltf.animations[0].name}`;
+                statusMsg.textContent = `Playing: ${gltf.animations[0].name}`;
             } else {
                 statusMsg.textContent = "Model loaded (Static).";
             }
-            
-            console.log("Model loaded successfully");
         }
 
-        // 1. Try to load 'character.glb' from relative path (Server mode)
+        function onError(error) {
+            console.error(error);
+            statusMsg.innerText = `Error: ${error.message || 'File not found'}\nCheck console/network tab.`;
+        }
+
+        // 1. Automatic Load for Production (Netlify)
+        // Ensure character.glb is in the same public folder as index.html
         loader.load(
             './character.glb',
             onModelLoaded,
             (xhr) => {
                 const percent = (xhr.loaded / xhr.total * 100).toFixed(0);
-                if(percent < 100) statusMsg.textContent = `Loading default: ${percent}%`;
+                if(percent < 100 && percent > 0) statusMsg.textContent = `Loading: ${percent}%`;
             },
             (error) => {
-                console.warn('Default character.glb not found. Use upload button.');
-                statusMsg.textContent = "Default file not found. Please upload.";
+                // If automatic load fails (common in preview or if file missing), prompt user
+                console.warn('Default character.glb not found:', error);
+                statusMsg.textContent = "Default file not found.\nPlease upload your .glb file.";
             }
         );
 
-        // 2. Handle File Upload (Browser Preview mode)
+        // 2. Manual Upload (Fallback)
         document.getElementById('file-input').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
 
             const url = URL.createObjectURL(file);
-            statusMsg.textContent = "Parsing uploaded file...";
+            statusMsg.textContent = "Parsing file...";
             
             loader.load(
                 url,
                 (gltf) => {
                     onModelLoaded(gltf);
-                    URL.revokeObjectURL(url); // Cleanup
+                    URL.revokeObjectURL(url);
                 },
                 undefined,
-                (error) => {
-                    statusMsg.textContent = "Error parsing file.";
-                    console.error(error);
-                }
+                onError
             );
         });
 
@@ -167,22 +184,18 @@
 
         function animate() {
             requestAnimationFrame(animate);
-            
             const delta = clock.getDelta();
             if (mixer) mixer.update(delta);
-
             controls.update();
             renderer.render(scene, camera);
         }
         animate();
 
-        // Resize handler
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
-
     </script>
 </body>
 </html>
