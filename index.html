@@ -8,7 +8,6 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
 
@@ -150,16 +149,86 @@
 <body>
     <div id="root"></div>
 
-    <script type="text/babel">
+    <script type="text/babel" data-presets="react">
         const { useState, useEffect, useRef } = React;
-        const { Play, Pause, SkipForward, Github, Twitter, Mail, Code, ExternalLink, Terminal, Monitor, Cpu } = lucide;
+
+        // --- Robust Inline Icons Component ---
+        const Icon = ({ children, className, size = 24, ...props }) => (
+            <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                width={size} 
+                height={size} 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                className={className} 
+                {...props}
+            >
+                {children}
+            </svg>
+        );
+
+        const Monitor = (props) => (
+            <Icon {...props}>
+                <rect width="20" height="14" x="2" y="3" rx="2" />
+                <line x1="8" x2="16" y1="21" y2="21" />
+                <line x1="12" x2="12" y1="17" y2="21" />
+            </Icon>
+        );
+
+        const Terminal = (props) => (
+            <Icon {...props}>
+                <polyline points="4 17 10 11 4 5" />
+                <line x1="12" x2="20" y1="19" y2="19" />
+            </Icon>
+        );
+
+        const Cpu = (props) => (
+            <Icon {...props}>
+                <rect width="16" height="16" x="4" y="4" rx="2" />
+                <rect width="6" height="6" x="9" y="9" rx="1" />
+                <path d="M15 2v2" /><path d="M15 20v2" />
+                <path d="M2 15h2" /><path d="M2 9h2" />
+                <path d="M20 15h2" /><path d="M20 9h2" />
+                <path d="M9 2v2" /><path d="M9 20v2" />
+            </Icon>
+        );
+
+        const ExternalLink = (props) => (
+            <Icon {...props}>
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                <polyline points="15 3 21 3 21 9" />
+                <line x1="10" x2="21" y1="14" y2="3" />
+            </Icon>
+        );
+
+        const Github = (props) => (
+            <Icon {...props}>
+                <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
+                <path d="M9 18c-4.51 2-5-2-7-2" />
+            </Icon>
+        );
+
+        const Twitter = (props) => (
+            <Icon {...props}>
+                <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z" />
+            </Icon>
+        );
+
+        const Mail = (props) => (
+            <Icon {...props}>
+                <rect width="20" height="16" x="2" y="4" rx="2" />
+                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+            </Icon>
+        );
 
         // --- Intro Sequence Component ---
         const IntroSequence = ({ onComplete }) => {
             const [text, setText] = useState("");
             const [stage, setStage] = useState(0);
-            
-            // This ref helps us check if the component is still mounted before state updates
             const isMounted = useRef(true);
 
             useEffect(() => {
@@ -190,8 +259,9 @@
                 return () => { isMounted.current = false; };
             }, [onComplete]);
 
+            // Note: z-60 ensures it's above the scanlines (z-50)
             return (
-                <div className="fixed inset-0 bg-black z-40 flex flex-col items-center justify-center overflow-hidden">
+                <div className="fixed inset-0 bg-black z-[60] flex flex-col items-center justify-center overflow-hidden">
                     {/* VHS Overlay */}
                     <div className="absolute top-10 left-10 text-xl font-bold text-white opacity-50 font-mono animate-pulse">
                         PLAY &#9658;
@@ -280,16 +350,16 @@
 
             return (
                 <div className="min-h-screen relative font-mono text-gray-100 selection:bg-pink-500 selection:text-white">
-                    {/* Scanlines Overlay - Always On */}
+                    {/* Scanlines Overlay - Always On (z-50) */}
                     <div className="scanlines"></div>
                     
                     {/* Moving Grid - Always On Background */}
                     <div className="grid-floor fixed"></div>
 
-                    {/* Intro Layer */}
+                    {/* Intro Layer (z-60) */}
                     {showIntro && <IntroSequence onComplete={finishIntro} />}
 
-                    {/* Main Content Layer */}
+                    {/* Main Content Layer (z-10) */}
                     {!showIntro && (
                         <div className="relative z-10 transition-opacity duration-1000 opacity-100">
                             
