@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SYNTHEYE // Digital Archive</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Core Three.js and GLTFLoader -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script> 
+    
+    <!-- Using a system monospace font stack for retro effect -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght400;700&display=swap" rel="stylesheet">
+    <style>
+        /* --- CLOCK TOWER/Survival Horror Palette --- */
+        :root {
+            --color-primary: #3a4f4d; /* Sickly, muted dark teal/green for UI */
+            --color-secondary: #ff3333; /* Alarming Red for danger/selection */
+            --color-text-light: #c0c0c0; /* Desaturated Off-White/Gray */
+            --color-text-dark: #1f2937; 
+            --color-bg-dark: #101012; /* Near Black / Deep Shadow */
+            --color-ui-dark: #1d1d20; /* Darker UI background for depth */
+        }
+
+        body {
+            /* Monospace font stack for a digital/retro blocky feel */
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            background-color: var(--color-bg-dark);
+            color: var(--color-text-light);
+            overflow: hidden; 
+        }
+
+        /* Video element styling for full screen */
+        .video-screen {
+            object-fit: cover;
+            width: 100vw;
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 50; /* Above UI elements, below menus */
+        }
+        
+        /* Overlay text for click to skip */
+        .skip-prompt {
+            position: absolute;
+            bottom: 5vh;
+            right: 5vw;
+            color: var(--color-text-light);
+            font-size: 0.8rem;
+            text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.9);
+            animation: pulse-fade 2s infinite;
+            pointer-events: none;
+            z-index: 60;
+        }
+
+        @keyframes pulse-fade {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        /* PS1/Low-Res Text Shadow - High contrast, slightly unsettling */
+        .retro-text-shadow {
+            text-shadow: 2px 2px 0 var(--color-secondary), 1px 1px 0 rgba(0, 0, 0, 0.9);
+        }
+
+        /* CRT Effect - More persistent noise and gloom */
+        .crt-effect::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0.20; /* Increased opacity for more grime/noise */
+            background: 
+                repeating-linear-gradient(
+                    0deg, 
+                    rgba(18, 16, 16, 0.7) 0, 
+                    rgba(18, 16, 16, 0.7) 1px, 
+                    transparent 1px, 
+                    transparent 2px
+                ),
+                radial-gradient(
+                    ellipse at center, 
+                    rgba(0,0,0,0) 0%, 
+                    rgba(0,0,0,0.8) 100%
+                );
+            filter: blur(0.5px);
+        }
+
+        .selected {
+            color: var(--color-secondary); /* Highlight in alarming red */
+            animation: blink 0.7s step-end infinite; /* Faster, more erratic blink */
+        }
+
+        /* Simple blinking animation for retro menu selection */
+        @keyframes blink {
+            50% { opacity: 0.8; }
+        }
+
+
+        .button-style {
+            transition: all 0.15s ease-in-out;
+            border: 2px solid var(--color-primary); /* Muted border for structure */
+            background-color: var(--color-ui-dark);
+            color: var(--color-text-light);
+            box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.9); /* Blocky, heavy button shadow */
+        }
+
+        .button-style:hover {
+            transform: translateY(-2px);
+            box-shadow: 6px 6px 0px var(--color-secondary); /* Red shadow on hover (Alert!) */
+        }
+
+        /* Styling for the 2D Archive */
+        .archive-bg {
+            background-color: var(--color-bg-dark);
+            color: var(--color-text-light);
+            padding: 0;
+        }
+        .archive-item {
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .archive-item:hover {
+            opacity: 0.7;
+        }
+        .archive-sidebar {
+            background-color: transparent;
+            font-size: 1.1rem;
+            line-height: 1.8;
+        }
+        .aspect-w-16 {
+            position: relative;
+            padding-bottom: 56.25%; 
+            height: 0;
+            overflow: hidden;
+        }
+        .aspect-w-16 iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body class="crt-effect" id="main-body">
+
+    <!-- 1. SYNTHEYE Logo Video Screen -->
+    <video id="video-logo" class="video-screen hidden" preload="auto" muted>
+        <!-- Replace with your actual logo video URL -->
+        <source src="assets/video/syntheye_logo.mp4" type="video/mp4">
+        Your browser does not support the video tag.
+    </video>
+
+    <!-- 2. Loading Screen Video -->
+    <video id="video-loading" class="video-screen hidden" preload="auto" muted>
+        <!-- Replace with your actual loading video URL (e.g., glitchy static/scanlines) -->
+        <source src="assets/video/syntheye_loading.mp4" type="video/mp4">
+        Your browser does not support the video tag.
+    </video>
+    <p id="prompt-loading-skip" class="skip-prompt hidden">CLICK TO SKIP SEQUENCE</p>
+
+    <!-- 3. Demo Reel Video (Skippable) -->
+    <div id="demoreel-container" class="fixed inset-0 hidden cursor-pointer bg-black z-50">
+        <video id="video-demoreel" class="video-screen" preload="auto" muted>
+            <!-- Replace with your actual demo reel video URL -->
+            <source src="assets/video/syntheye_demoreel.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+        <p id="prompt-demoreel-skip" class="skip-prompt">CLICK TO SKIP REEL</p>
+    </div>
+
+    <!-- 4. Press START Screen -->
+    <div id="menu-press-start" class="screen fixed inset-0 flex items-center justify-center p-8 bg-slate-900/95 z-40 hidden">
+        <button onclick="window.App.setScreen('main-menu')" 
+                class="text-5xl font-extrabold tracking-widest text-red-700 retro-text-shadow animate-pulse button-style p-6">
+            PRESS START
+        </button>
+    </div>
+
+    <!-- 5. Main Menu Screen (Customized) -->
+    <div id="main-menu" class="screen fixed inset-0 flex flex-col items-center justify-center p-8 bg-slate-900/90 z-20 hidden">
+        <h1 class="text-6xl font-extrabold mb-8 tracking-widest text-red-700 retro-text-shadow">SYNTHEYE</h1>
+        <h2 class="text-2xl font-bold mb-12 text-gray-500">DIGITAL ARCHIVE // SYSTEM FAULT</h2>
+        <div id="menu-options" class="space-y-4 w-64 text-xl">
+            <!-- START 3D EXPERIENCE is the core 'start' action -->
+            <div class="menu-item cursor-pointer selected retro-text-shadow" data-action="start">
+                <span class="selection-arrow mr-2">▶</span> START 3D EXPERIENCE
+            </div>
+            <div class="menu-item cursor-pointer retro-text-shadow" data-action="archive">
+                <span class="selection-arrow mr-2 invisible">▶</span> 2D PORTFOLIO ARCHIVE
+            </div>
+            <div class="menu-item cursor-pointer retro-text-shadow" data-action="about">
+                <span class="selection-arrow mr-2 invisible">▶</span> ABOUT THE ARCHITECT
+            </div>
+            <div class="menu-item cursor-pointer retro-text-shadow" data-action="options">
+                <span class="selection-arrow mr-2 invisible">▶</span> CONFIGURATION
+            </div>
+            <!-- DATA LOGS removed as requested -->
+        </div>
+    </div>
+
+    <!-- Overworld UI (3D Game) - Visibility controlled by App.js after 'start' action -->
+    <div id="overworld-ui" class="screen fixed inset-0 hidden">
+        <!-- Canvas will be inserted here by Three.js -->
+        
+        <!-- Exhibit Interaction Prompt (Urgent Red) -->
+        <div id="interaction-prompt" class="absolute bottom-5 left-1/2 -translate-x-1/2 p-3 bg-red-900/90 text-white rounded-lg shadow-xl hidden transition-opacity duration-300 border-2 border-red-500 retro-text-shadow">
+            [E] ACCESS: <span id="prompt-text" class="font-bold">Exhibit Title</span>
+        </div>
+        
+        <!-- Controls Help -->
+        <div class="absolute top-4 right-4 text-xs bg-slate-900/80 p-2 rounded retro-text-shadow border border-gray-700">
+            <p>[W A S D / Arrows] MOVE</p>
+            <p>[ESC] ABORT</p>
+        </div>
+        
+        <!-- Loading Indicator -->
+        <div id="loading-indicator" class="absolute inset-0 flex items-center justify-center bg-slate-900/95 z-10">
+            <p class="text-2xl text-red-500 animate-pulse retro-text-shadow">SYSTEM// LOADING ASSETS (0%)</p>
+        </div>
+    </div>
+
+    <!-- The rest of the modals and menus (popup-ui, archive-menu, about-me-menu, model-inspector-ui, options-menu, credits-menu) are below and remain the same as they are only shown on action. -->
+
+    <!-- Exhibit Popup (Using dark, structured UI) -->
+    <div id="popup-ui" class="screen fixed inset-0 flex items-center justify-center p-4 hidden bg-slate-900/95 z-20">
+        <div class="w-full max-w-2xl bg-gray-900 p-6 rounded-xl shadow-2xl border-4 border-red-800">
+            <h2 id="popup-title" class="text-3xl font-bold text-red-500 mb-4 retro-text-shadow">Exhibit Title</h2>
+            <div id="popup-content" class="text-lg text-gray-300 mb-6 max-h-[70vh] overflow-y-auto border-t border-b border-gray-700 py-4">
+                <!-- Content for the exhibit or video iframe will appear here -->
+            </div>
+            <button onclick="window.App.closeExhibit()" class="button-style bg-red-900 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">
+                [B] CLOSE TRANSMISSION
+            </button>
+        </div>
+    </div>
+
+    <!-- Portfolio Archive Screen -->
+    <div id="archive-menu" class="screen fixed inset-0 hidden archive-bg p-4 overflow-y-auto">
+        <div class="max-w-7xl mx-auto flex h-full min-h-screen">
+            <!-- Left Sidebar Navigation -->
+            <div class="archive-sidebar w-48 sticky top-0 h-full p-4 mr-8 border-r border-red-700/50 hidden md:block">
+                <h1 class="text-3xl font-bold mb-8 retro-text-shadow text-red-500">NICHOLAS M. SIEGEL</h1>
+                <nav id="archive-nav" class="space-y-2">
+                    <!-- Links populated by JS -->
+                </nav>
+                <div class="absolute bottom-4 left-4 text-xs">
+                    <button onclick="window.App.setScreen('main-menu')" class="button-style text-gray-400 hover:text-white">
+                        [B] Main Menu
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Main Grid Content -->
+            <div id="archive-content" class="flex-grow pt-4 pb-20">
+                <h2 class="text-4xl font-extrabold mb-8 text-center text-white md:text-left retro-text-shadow">CLASSIFIED ARCHIVE</h2>
+                <div class="text-center md:hidden mb-4">
+                    <button onclick="window.App.setScreen('main-menu')" class="button-style bg-gray-800 text-white font-bold py-2 px-4 rounded-lg">
+                        [B] Back
+                    </button>
+                </div>
+                <!-- Dynamic content populated by JS -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- About Me Screen -->
+    <div id="about-me-menu" class="screen fixed inset-0 flex items-center justify-center p-4 hidden bg-slate-900/90 z-30">
+        <div class="w-full max-w-2xl bg-gray-900 p-8 rounded-xl shadow-2xl border-4 border-red-700/50">
+            <h2 class="text-4xl font-extrabold text-red-500 mb-6 text-center retro-text-shadow">NICHOLAS M. SIEGEL</h2>
+            <div class="space-y-4 text-gray-300 leading-relaxed">
+                <p>Welcome to SYNTHEYE. I am Nicholas M. Siegel, a multidisciplinary artist and developer specializing in 3D visualization, interactive experiences, and dynamic media creation.</p>
+                <p>My work sits at the intersection of technical prowess and creative storytelling, ranging from high-concept music videos and cinematic 3D environments to experimental game development clips and audio samples.</p>
+                <p>This archive is a testament to years of work across various digital mediums. Use the 3D experience for an immersive, atmospheric exploration, or switch to the 2D Portfolio Archive for a quick, categorized review of my projects.</p>
+            </div>
+            <button onclick="window.App.setScreen('main-menu')" class="mt-8 button-style bg-red-900 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg w-full">
+                [B] RETURN TO MAIN MENU
+            </button>
+        </div>
+    </div>
+
+    <!-- 3D Model Inspector Modal -->
+    <div id="model-inspector-ui" class="screen fixed inset-0 flex items-center justify-center p-4 hidden bg-black/90 z-40">
+        <div class="w-full max-w-3xl h-full max-h-[90vh] bg-gray-900 p-2 rounded-xl shadow-2xl flex flex-col border-4 border-red-700/50">
+            <h2 id="inspector-title" class="text-2xl font-bold text-red-500 mb-2 p-2 retro-text-shadow">3D MODEL INSPECTION: [Title]</h2>
+            <div id="model-viewer-container" class="flex-grow bg-slate-900 rounded-lg overflow-hidden relative">
+                <!-- Three.js canvas will be inserted here -->
+                <div id="inspector-loading" class="absolute inset-0 flex items-center justify-center text-xl text-red-500 retro-text-shadow">ACCESSING MODEL DATA...</div>
+            </div>
+            <div class="p-2 pt-4 flex justify-between items-center">
+                <p class="text-sm text-gray-400">MOUSE/TOUCH: ROTATE VIEW.</p>
+                <button onclick="window.App.closeModelInspector()" class="button-style bg-red-900 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">
+                    [B] CLOSE INSPECTOR
+                </button>
+            </div>
+        </div>
+    </div>
+    
+
+    <!-- Hidden Menus (Overlay) -->
+    <div id="options-menu" class="screen fixed inset-0 flex items-center justify-center p-4 hidden bg-slate-900/80 z-30">
+        <div class="w-full max-w-md bg-gray-900 p-6 rounded-xl shadow-2xl border-4 border-red-700/50">
+            <h2 class="text-3xl font-bold text-white mb-4 retro-text-shadow">CONFIGURATION</h2>
+            <div class="space-y-4">
+                <p>CRT SCANLINES: <span id="crt-status" class="font-bold cursor-pointer text-red-500" onclick="window.App.toggleCrtEffect()">ACTIVE</span></p>
+            </div>
+            <button onclick="window.App.hideMenu('options-menu')" class="mt-6 button-style bg-red-900 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">
+                [B] BACK
+            </button>
+        </div>
+    </div>
+
+    <div id="credits-menu" class="screen fixed inset-0 flex items-center justify-center p-4 hidden bg-slate-900/80 z-30">
+        <div class="w-full max-w-md bg-gray-900 p-6 rounded-xl shadow-2xl border-4 border-red-700/50">
+            <h2 class="text-3xl font-bold text-white mb-4 retro-text-shadow">DATA LOGS (Removed from menu)</h2>
+            <p class="text-gray-300">SYSTEM ARCHITECT: Nicholas M. Siegel</p>
+            <p class="text-gray-300">GRAPHICS ENGINE: Three.js</p>
+            <button onclick="window.App.hideMenu('credits-menu')" class="mt-6 button-style bg-red-900 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">
+                [B] BACK
+            </button>
+        </div>
+    </div>
+
+    <!-- PRE-LOADER / ORCHESTRATION SCRIPT -->
+    <script>
+        // Simple screen transition handler used by the pre-loader sequence
+        const setScreen = (id) => {
+            document.querySelectorAll('.screen, .video-screen, #demoreel-container').forEach(el => {
+                el.classList.add('hidden');
+            });
+            const target = document.getElementById(id);
+            if (target) {
+                target.classList.remove('hidden');
+            }
+        };
+
+        const playVideoSequence = () => {
+            const logoVideo = document.getElementById('video-logo');
+            const loadingVideo = document.getElementById('video-loading');
+            const demoReelVideo = document.getElementById('video-demoreel');
+            const demoReelContainer = document.getElementById('demoreel-container');
+            const demoreelSkipPrompt = document.getElementById('prompt-demoreel-skip');
+
+            // --- 1. Logo Video ---
+            setScreen('video-logo');
+            logoVideo.currentTime = 0;
+            logoVideo.play().catch(e => console.error("Logo video playback failed:", e));
+            logoVideo.onended = () => {
+                // --- 2. Loading Video ---
+                setScreen('video-loading');
+                loadingVideo.currentTime = 0;
+                loadingVideo.loop = true; // Use loop for loading for flexibility
+                loadingVideo.play().catch(e => console.error("Loading video playback failed:", e));
+
+                // Wait 3 seconds then transition to Demo Reel
+                setTimeout(() => {
+                    loadingVideo.pause();
+                    loadingVideo.loop = false;
+                    
+                    // --- 3. Demo Reel Video ---
+                    setScreen('demoreel-container');
+                    demoReelVideo.currentTime = 0;
+                    demoReelVideo.play().catch(e => console.error("Demo reel playback failed:", e));
+                    
+                    // Click to Skip/Exit Logic
+                    const goToStartMenu = () => {
+                        demoReelVideo.pause();
+                        demoReelVideo.removeEventListener('ended', goToStartMenu);
+                        demoReelContainer.removeEventListener('click', skipReel);
+                        setScreen('menu-press-start');
+                    };
+
+                    const skipReel = (event) => {
+                        // Prevent accidental click-through if target is a button, etc.
+                        if (event.target === demoReelContainer || event.target === demoReelVideo) {
+                            goToStartMenu();
+                        }
+                    };
+
+                    demoReelVideo.onended = goToStartMenu;
+                    demoReelContainer.addEventListener('click', skipReel);
+                    demoreelSkipPrompt.classList.remove('hidden');
+
+                }, 3000); // 3-second minimum loading screen
+            };
+        };
+
+        // Start the process when the window and all resources are loaded
+        window.addEventListener('load', () => {
+             // The main app logic will rely on window.App, so define it early
+            window.App = window.App || {}; 
+            window.App.setScreen = setScreen;
+            // Define other global App functions expected by buttons (App.closeExhibit, App.closeModelInspector, etc.)
+            // These will be properly implemented in App.js but need placeholders for clicks to work.
+            window.App.closeExhibit = () => setScreen('overworld');
+            window.App.closeModelInspector = () => setScreen(window.App.currentScreenBeforePopup || 'overworld');
+            window.App.hideMenu = (id) => setScreen('main-menu');
+            window.App.toggleCrtEffect = () => document.body.classList.toggle('crt-effect');
+            
+            playVideoSequence();
+
+            // Set up mute/unmute logic for all videos (assuming they should be muted by default)
+            [document.getElementById('video-logo'), document.getElementById('video-loading'), document.getElementById('video-demoreel')]
+                .forEach(video => {
+                    if (video) { video.muted = true; }
+                });
+        });
+    </script>
+
+    <!-- Module Import: This line loads the main orchestrator script -->
+    <script type="module" src="App.js"></script>
+
+</body>
+</html>
