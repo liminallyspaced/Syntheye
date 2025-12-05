@@ -26,7 +26,7 @@
         <div class="bg-gray-900/80 text-white p-6 rounded-xl shadow-lg backdrop-blur-sm border border-gray-700 max-w-sm interactive">
             <h1 class="text-2xl font-bold mb-2 text-blue-400">Model Viewer</h1>
             <p class="text-gray-300 text-sm mb-4">
-                Loading <code>character.gltf</code>...<br>
+                Loading <code>character.glb</code>...<br>
                 <span class="text-xs text-gray-400">If the file isn't found (because this is a web preview), use the button below to load your local file.</span>
             </p>
             <div class="flex flex-col gap-3">
@@ -126,16 +126,16 @@
             console.log("Model loaded successfully");
         }
 
-        // 1. Try to load 'character.gltf' from relative path (Server mode)
+        // 1. Try to load 'character.glb' from relative path (Server mode)
         loader.load(
-            './character.gltf',
+            './character.glb',
             onModelLoaded,
             (xhr) => {
                 const percent = (xhr.loaded / xhr.total * 100).toFixed(0);
                 if(percent < 100) statusMsg.textContent = `Loading default: ${percent}%`;
             },
             (error) => {
-                console.warn('Default character.gltf not found. Use upload button.');
+                console.warn('Default character.glb not found. Use upload button.');
                 statusMsg.textContent = "Default file not found. Please upload.";
             }
         );
