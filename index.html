@@ -363,6 +363,11 @@
         // --- 1. CORE CONFIGURATION & CONTENT ---
         // =================================================================================
         
+        // --- CONFIGURATION ---
+        // EDIT THIS PATH TO MATCH YOUR GITHUB REPO STRUCTURE
+        // If index.html and character.glb are in the same folder, keep it as './character.glb'
+        const CHARACTER_MODEL_PATH = './character.glb'; 
+
         const STATE = {
             screen: 'main-menu', 
             menuIndex: 0,
@@ -615,7 +620,9 @@
             // 2. Load Custom GLB Character
             const loader = new THREE.GLTFLoader();
             
-            loader.load('./character.glb', function (gltf) {
+            console.log("Attempting to load character from:", CHARACTER_MODEL_PATH);
+
+            loader.load(CHARACTER_MODEL_PATH, function (gltf) {
                 const model = gltf.scene;
                 
                 // Adjust scale if your model is too big/small
@@ -648,7 +655,8 @@
 
                 console.log("Character loaded successfully!");
             }, undefined, function (error) {
-                console.log("No custom character found (404), keeping placeholder box.");
+                console.error("Error loading character:", error);
+                console.log("Using placeholder box instead.");
             });
 
             // Target Marker (Destination Ring)
