@@ -1,119 +1,76 @@
-import { initScene, animateScene, cleanupScene } from './three-scene.js';
-import { DOM, STATE } from './constants.js';
-import { showArchive } from './archive.js';
-import { openModelInspector, closeModelInspector } from './inspector.js';
-import { setScreen, updateMenuSelection, handleMenuKeydown, openExternalLink } from './utils.js';
+import { STATE } from './constants.js';
+import { setScreen, showMenu, hideMenu } from './utils.js';
+import { initAudio, playMusic } from './audio.js';
+import { setupInspectionView, startInspectionView, stopInspectionView } from './inspector.js';
+import { initThree, setRoom, animate } from './three_scene.js'; // Note file import change
 
-// Global access point for HTML event handlers
-window.App = {
-    setScreen,
-    closeExhibit: () => setScreen(STATE.currentScreenBeforePopup === 'archive-menu' ? 'archive-menu' : 'overworld'),
-    toggleCrtEffect: () => {
-        STATE.isCrtActive = !STATE.isCrtActive;
-        DOM.body.classList.toggle('crt-effect', STATE.isCrtActive);
-        DOM.body.querySelector('#crt-status').textContent = STATE.isCrtActive ? 'ACTIVE' : 'INACTIVE';
+const App = {
+    setScreen, showMenu,
+    
+    closePopup: () => {
+        stopInspectionView();
+        setScreen('screen-overworld');
     },
-    showMenu: (menuId) => setScreen(menuId),
-    hideMenu: (menuId) => setScreen('main-menu'),
-    showArchive,
-    openModelInspector,
-    closeModelInspector,
-    openExternalLink,
+
+    handleInteraction: (data) => {
+        if (data.type === 'text') {
+            document.getElementById('popup-text-title').innerText = data.title;
+            document.getElementById('popup-text-content').innerText = data.text;
+            setScreen('popup-text');
+        } else if (data.type === 'inspect') {
+            document.getElementById('popup-inspect-title').innerText = data.title;
+            document.getElementById('popup-inspect-desc').innerText = data.text;
+            setScreen('popup-inspect');
+            startInspectionView(data.id);
+        }
+    },
+
+    init: () => {
+        initAudio();
+        setupInspectionView();
+        initThree(App.handleInteraction);
+        animate(); 
+
+        const videoSeq = document.getElementById('video-sequence');
+        const pressStart = document.getElementById('screen-press-start');
+
+        videoSeq.addEventListener('click', () => {
+            videoSeq.style.display = 'none';
+            pressStart.style.display = 'flex';
+        });
+
+        document.getElementById('btn-press-start').addEventListener('click', () => {
+            pressStart.style.display = 'none';
+            setScreen('screen-main-menu');
+        });
+
+        document.querySelectorAll('.menu-btn').forEach(btn => {
+            btn.addEventListener('mouseenter', () => {
+                document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+            });
+            btn.addEventListener('click', () => {
+                const action = btn.dataset.action;
+                if (action === 'start') {
+                    document.getElementById('loading-indicator').classList.remove('hidden');
+                    setTimeout(() => {
+                        document.getElementById('loading-indicator').classList.add('hidden');
+                        setScreen('screen-overworld');
+                        setRoom('ROOM_HALL', [0, 1, 0]);
+                    }, 1000);
+                } else if (action === 'about') {
+                    document.getElementById('generic-title').innerText = "ABOUT THE ARCHITECT";
+                    document.getElementById('generic-content').innerText = "Nicholas M. Siegel...";
+                    setScreen('screen-generic');
+                } else if (action === 'archive') {
+                    document.getElementById('generic-title').innerText = "ARCHIVE";
+                    document.getElementById('generic-content').innerText = "Loading Archive...";
+                    setScreen('screen-generic');
+                }
+            });
+        });
+    }
 };
 
-// --- Initialization ---
-function initApp() {
-    setupMainMenu();
-    setupGlobalKeyHandlers();
-
-    // Start with the main menu screen
-    setScreen('main-menu');
-}
-
-// --- Main Menu Logic ---
-function setupMainMenu() {
-    const menuItems = Array.from(document.querySelectorAll('#menu-options .menu-item'));
-    
-    // Mouse/Click handling
-    menuItems.forEach((item, index) => {
-        item.addEventListener('mouseover', () => updateMenuSelection(index));
-        item.addEventListener('click', () => handleMenuAction(item.dataset.action));
-    });
-}
-
-// --- Global Key Handlers ---
-function setupGlobalKeyHandlers() {
-    document.addEventListener('keydown', (e) => {
-        // Handle menu navigation on main menu
-        if (STATE.screen === 'main-menu') {
-            handleMenuKeydown(e);
-            return;
-        }
-
-        // Handle ESC key for pausing/closing
-        if (e.key === 'Escape' && STATE.screen !== 'main-menu' && STATE.screen !== 'archive-menu') {
-            e.preventDefault();
-            // If in overworld, show menu overlay
-            if (STATE.screen === 'overworld') {
-                cleanupScene(); // Pause the 3D loop
-                setScreen('main-menu');
-            } else if (STATE.screen === 'popup-ui' || STATE.screen === 'model-inspector-ui') {
-                // If in a popup/inspector, close it
-                if (STATE.screen === 'model-inspector-ui') {
-                    window.App.closeModelInspector();
-                } else {
-                    window.App.closeExhibit();
-                }
-            } else if (STATE.screen === 'options-menu' || STATE.screen === 'credits-menu' || STATE.screen === 'about-me-menu') {
-                 setScreen('main-menu');
-            }
-            return;
-        }
-
-        // Handle 'B' key to close popups or return from archive (mapped to closeExhibit/setScreen calls)
-        if (e.key.toLowerCase() === 'b' && (STATE.screen === 'popup-ui' || STATE.screen === 'model-inspector-ui')) {
-            e.preventDefault();
-            if (STATE.screen === 'model-inspector-ui') {
-                window.App.closeModelInspector();
-            } else {
-                window.App.closeExhibit();
-            }
-            return;
-        }
-        
-        // Handle 'E' key for overworld interaction
-        if (e.key.toLowerCase() === 'e' && STATE.screen === 'overworld' && STATE.activeTrigger) {
-            e.preventDefault();
-            STATE.activeTrigger.callback();
-        }
-    });
-}
-
-// --- Menu Action Dispatcher ---
-function handleMenuAction(action) {
-    switch (action) {
-        case 'start':
-            DOM.loadingIndicator.classList.remove('hidden');
-            setScreen('overworld');
-            initScene();
-            animateScene();
-            break;
-        case 'archive':
-            showArchive();
-            break;
-        case 'about':
-            setScreen('about-me-menu');
-            break;
-        case 'options':
-            DOM.body.querySelector('#crt-status').textContent = STATE.isCrtActive ? 'ACTIVE' : 'INACTIVE';
-            setScreen('options-menu');
-            break;
-        case 'credits':
-            setScreen('credits-menu');
-            break;
-    }
-}
-
-
-// Start the application when the DOM is fully loaded
-document.addEventListener('DOMContentLoaded', initApp);
+window.App = App;
+window.onload = App.init;

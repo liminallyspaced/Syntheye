@@ -1,78 +1,34 @@
-import { DOM, STATE } from './constants.js';
-
-// --- Screen Management ---
-const screens = {
-    'main-menu': document.getElementById('main-menu'),
-    'overworld': document.getElementById('overworld-ui'),
-    'popup-ui': document.getElementById('popup-ui'),
-    'archive-menu': document.getElementById('archive-menu'),
-    'about-me-menu': document.getElementById('about-me-menu'),
-    'model-inspector-ui': document.getElementById('model-inspector-ui'),
-    'options-menu': document.getElementById('options-menu'),
-    'credits-menu': document.getElementById('credits-menu'),
-};
+import { STATE } from './constants.js';
+import { playMusic } from './audio.js';
 
 export function setScreen(newScreen) {
-    if (STATE.screen === newScreen) return;
+    const screens = ['video-sequence', 'screen-press-start', 'screen-main-menu', 'screen-overworld', 'screen-generic'];
+    const popups = ['popup-text', 'popup-inspect'];
     
-    // Special handling for popups to track where we came from
-    if (newScreen === 'popup-ui' || newScreen === 'model-inspector-ui') {
-        STATE.currentScreenBeforePopup = STATE.screen;
+    screens.forEach(id => { const el = document.getElementById(id); if(el) el.style.display = 'none'; });
+    popups.forEach(id => { const el = document.getElementById(id); if(el) el.style.display = 'none'; });
+
+    const target = document.getElementById(newScreen);
+    if(target) {
+        if(newScreen.startsWith('popup')) {
+            document.getElementById('screen-overworld').style.display = 'block';
+            target.style.display = 'block';
+        } else {
+            target.style.display = (newScreen === 'screen-overworld') ? 'block' : 'flex';
+        }
     }
 
-    // Hide all screens
-    Object.values(screens).forEach(el => el.classList.add('hidden'));
-
-    // Show the new screen
-    const targetScreen = screens[newScreen];
-    if (targetScreen) {
-        targetScreen.classList.remove('hidden');
-        STATE.screen = newScreen;
-    } else {
-        console.error(`Attempted to set unknown screen: ${newScreen}`);
-    }
-}
-
-// --- Menu Navigation ---
-export function updateMenuSelection(index) {
-    const menuItems = Array.from(document.querySelectorAll('#main-menu .menu-item'));
-    if (index >= 0 && index < menuItems.length) {
-        menuItems.forEach((item, i) => {
-            item.classList.toggle('selected', i === index);
-            item.querySelector('.selection-arrow').classList.toggle('invisible', i !== index);
-        });
-        STATE.menuIndex = index;
+    if (newScreen === 'screen-main-menu') {
+        STATE.screen = 'main-menu'; 
+        playMusic('menu');
+    } else if (newScreen === 'screen-overworld') {
+        STATE.screen = 'overworld';
+        playMusic('game');
+    } else if (newScreen.startsWith('popup')) {
+        STATE.screen = 'popup';
     }
 }
 
-export function handleMenuKeydown(e) {
-    const menuItems = Array.from(document.querySelectorAll('#main-menu .menu-item'));
-    const maxIndex = menuItems.length - 1;
-
-    let newIndex = STATE.menuIndex;
-    let handled = false;
-
-    if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') {
-        newIndex = (STATE.menuIndex + 1) % (maxIndex + 1);
-        handled = true;
-    } else if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') {
-        newIndex = (STATE.menuIndex - 1 + (maxIndex + 1)) % (maxIndex + 1);
-        handled = true;
-    } else if (e.key === 'Enter') {
-        e.preventDefault();
-        const action = menuItems[STATE.menuIndex].dataset.action;
-        // Dispatch the action through the global App object
-        window.App.setScreen(action);
-        handled = true;
-    }
-
-    if (handled) {
-        e.preventDefault();
-        updateMenuSelection(newIndex);
-    }
-}
-
-// --- External Link Handler ---
-export function openExternalLink(url) {
-    window.open(url, '_blank');
+export function showMenu(menuId) {
+    // Logic for overlay menus
 }

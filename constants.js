@@ -1,98 +1,58 @@
-// --- STATE & GLOBALS ---
 export const STATE = {
-    screen: 'main-menu', // main-menu, overworld, popup, menu-overlay, archive, model-inspector
-    menuIndex: 0,
-    isCrtActive: true,
-    player: { x: 0, z: 0, speed: 0.08, rotationY: 0 },
-    activeTrigger: null, // Stores the trigger object when the player is near one
-    controls: { w: false, s: false, a: false, d: false },
+    screen: 'video', 
+    room: 'ROOM_HALL',
+    // Using object literal to avoid THREE dependency in constants
+    pos: {x:0, y:1, z:0}, 
+    target: null, 
+    activeHotspot: null,
+    cluesFound: [false, false, false],
+    secretUnlocked: false,
+    audioEnabled: true,
+    music_volume: 0.5
 };
 
-// --- DOM REFERENCES (Exported for easy access) ---
-export const DOM = {
-    body: document.body,
-    promptText: document.getElementById('prompt-text'),
-    interactionPrompt: document.getElementById('interaction-prompt'),
-    loadingIndicator: document.getElementById('loading-indicator'),
-    archiveContent: document.getElementById('archive-content'),
-    archiveNav: document.getElementById('archive-nav'),
-    popupTitle: document.getElementById('popup-title'),
-    popupContent: document.getElementById('popup-content'),
-    overworldUI: document.getElementById('overworld-ui'),
+export const PORTFOLIO_CONTENT = {
+    clue_clock: { title: 'CLOCK NOTE', text: "The hour hand points to ONE. Not 1 o'clock, but one clue.", type: 'puzzle' },
+    gallery_model1: { title: 'THE WATCHER', text: "Low-poly character model. 2024.", type: 'inspect' },
+    archive_concept: { title: 'CONCEPT ART', text: "Early sketches of the facility.", type: 'text' }
 };
 
-// --- THREE.JS GLOBALS (Managed externally but initialized here) ---
-export const THREE_GLOBALS = {
-    scene: null, 
-    camera: null, 
-    renderer: null,
-    playerMesh: null, // GLTF scene/model
-    clock: new THREE.Clock(),
-    mixer: null, // Animation mixer
-    actions: {}, // Animation actions map
-    currentActionName: 'Idle',
-    inspector: { // For the separate 3D model inspector
-        scene: null, 
-        camera: null, 
-        renderer: null, 
-        mesh: null,
-        animateId: null,
-        isDragging: false,
-        previousMousePosition: { x: 0, y: 0 }
-    }
-};
-
-// !!! UPDATED: Use the structure below for GitHub Pages direct links !!!
-// Replace [YOUR-USERNAME], [REPO-NAME], and [PATH-TO-FILE] with your actual data.
-const GITHUB_PAGES_BASE = 'https://[YOUR-USERNAME].github.io/[REPO-NAME]/assets/';
-
-// This is the model used for the main player character in the 3D overworld
-export const MODEL_URL = GITHUB_PAGES_BASE + 'models/main-character.glb'; 
-
-// --- PORTFOLIO DATA ---
-export const PORTFOLIO_DATA = [
-    { 
-        category: "REEL", 
-        id: "reel",
-        description: "A montage of different works made over the years.",
-        items: [
-            { 
-                title: "2024 DEMO REEL", 
-                type: "video", 
-                embedUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1", // Placeholder link
-                thumbnail: "https://placehold.co/1280x720/161618/d1d1d1?text=2024+DEMO+REEL"
-            }
+export const ROOM_DATA = {
+    ROOM_HALL: {
+        name: "MAIN HALL",
+        camPos: [10, 8, 10], camTarget: [0, 0, 0],
+        spawn: [0, 1, 0],
+        geometry: [
+            { type: 'box', dim: [20, 0.2, 20], pos: [0, 0, 0], color: 0x2a2a2a, name: 'floor' }, 
+            { type: 'box', dim: [1, 4, 1], pos: [5, 2, -5], color: 0x3d2719, name: 'clock', hotspot: { type: 'inspect', id: 'gallery_model1', title: 'GRANDFATHER CLOCK', text: "Time stands still...", clueIdx: 0 } }
+        ],
+        hotspots: [
+            { type: 'door', pos: [0, 1, -9], radius: 1.5, target: 'ROOM_GALLERY', spawn: [0, 1, 8], label: 'GALLERY' },
+            { type: 'door', pos: [-9, 1, 0], radius: 1.5, target: 'ROOM_ARCHIVE', spawn: [8, 1, 0], label: 'ARCHIVE' }
         ]
     },
-    { 
-        category: "3D MODELS", 
-        id: "3d-models",
-        description: "Inspect finished 3D assets from various projects. Drag to rotate.",
-        items: [
-            { 
-                title: "NEBULA SHIP (Custom Model)", 
-                type: "model", 
-                // Placeholder for your GitHub-hosted model
-                modelUrl: GITHUB_PAGES_BASE + 'models/nebula-ship.glb', 
-                thumbnail: "https://placehold.co/1280x720/222224/d1d1d1?text=3D+MODEL:+SHIP"
-            },
-            { 
-                title: "VINTAGE CAMERA (Custom Model)", 
-                type: "model", 
-                // Placeholder for your GitHub-hosted model
-                modelUrl: GITHUB_PAGES_BASE + 'models/vintage-camera.glb', 
-                thumbnail: "https://placehold.co/1280x720/222224/d1d1d1?text=3D+MODEL:+CAMERA"
-            }
+    ROOM_GALLERY: {
+        name: "THE GALLERY",
+        camPos: [-10, 6, 0], camTarget: [0, 1, 0],
+        spawn: [0, 1, 8],
+        geometry: [
+            { type: 'box', dim: [20, 0.2, 20], pos: [0, 0, 0], color: 0x1a1a1a, name: 'floor' },
+            { type: 'box', dim: [2, 1, 2], pos: [0, 0.5, 0], color: 0x550000, name: 'pedestal', hotspot: { type: 'inspect', id: 'gallery_model1', title: 'ARTIFACT', text: "Strange geometry.", clueIdx: 1 } }
+        ],
+        hotspots: [
+            { type: 'door', pos: [0, 1, 9], radius: 1.5, target: 'ROOM_HALL', spawn: [0, 1, -8], label: 'MAIN HALL' }
         ]
     },
-    { 
-        category: "SHARED FILES", 
-        id: "shared-files",
-        description: "Links to various files (PDFs, ZIPs, etc.). Direct URL required.",
-        items: [
-            { title: "Project Brief (PDF)", type: "link", url: GITHUB_PAGES_BASE + 'files/file-1.pdf', thumbnail: "https://placehold.co/1280x720/3b5249/d1d1d1?text=PROJECT+BRIEF" },
-            { title: "Asset Pack (ZIP)", type: "link", url: GITHUB_PAGES_BASE + 'files/file-2.zip', thumbnail: "https://placehold.co/1280x720/3b5249/d1d1d1?text=ASSET+PACK" },
-            { title: "Another GLB Asset", type: "link", url: GITHUB_PAGES_BASE + 'files/file-3.glb', thumbnail: "https://placehold.co/1280x720/3b5249/d1d1d1?text=GLB+DOWNLOAD" },
+    ROOM_ARCHIVE: {
+        name: "ARCHIVE STORAGE",
+        camPos: [0, 10, 0], camTarget: [0, 0, 0],
+        spawn: [8, 1, 0],
+        geometry: [
+            { type: 'box', dim: [20, 0.2, 10], pos: [0, 0, 0], color: 0x1a2a1a, name: 'floor' },
+            { type: 'box', dim: [2, 2, 2], pos: [-5, 1, 0], color: 0x444444, name: 'files', hotspot: { type: 'text', id: 'archive_concept', title: 'LOGS', text: "System corrupted...", clueIdx: 2 } }
+        ],
+        hotspots: [
+            { type: 'door', pos: [9, 1, 0], radius: 1.5, target: 'ROOM_HALL', spawn: [-8, 1, 0], label: 'MAIN HALL' }
         ]
     }
-];
+};
