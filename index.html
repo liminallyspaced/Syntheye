@@ -163,7 +163,6 @@
         <source src="assets/video/syntheye_loading.mp4" type="video/mp4">
         Your browser does not support the video tag.
     </video>
-    <p id="prompt-loading-skip" class="skip-prompt hidden">CLICK TO SKIP SEQUENCE</p>
 
     <!-- 3. Demo Reel Video (Skippable) -->
     <div id="demoreel-container" class="fixed inset-0 hidden cursor-pointer bg-black z-50">
@@ -172,8 +171,11 @@
             <source src="assets/video/syntheye_demoreel.mp4" type="video/mp4">
             Your browser does not support the video tag.
         </video>
-        <p id="prompt-demoreel-skip" class="skip-prompt">CLICK TO SKIP REEL</p>
     </div>
+    
+    <!-- Global Skip Prompt for all sequences -->
+    <p id="prompt-sequence-skip" class="skip-prompt hidden">CLICK TO SKIP SEQUENCE</p>
+
 
     <!-- 4. Press START Screen -->
     <div id="menu-press-start" class="screen fixed inset-0 flex items-center justify-center p-8 bg-slate-900/95 z-40 hidden">
@@ -329,6 +331,9 @@
 
     <!-- PRE-LOADER / ORCHESTRATION SCRIPT -->
     <script>
+        let sequenceTimeout = null;
+        let isSequenceActive = false;
+
         // Simple screen transition handler used by the pre-loader sequence
         const setScreen = (id) => {
             document.querySelectorAll('.screen, .video-screen, #demoreel-container').forEach(el => {
@@ -340,55 +345,97 @@
             }
         };
 
+        /**
+         * Skips the entire video sequence and jumps immediately to the PRESS START screen.
+         * Also serves as a fallback mechanism if video playback fails.
+         */
+        const skipAllVideos = () => {
+            if (!isSequenceActive) return;
+
+            isSequenceActive = false;
+            
+            // Clear any pending timeouts
+            if (sequenceTimeout) {
+                clearTimeout(sequenceTimeout);
+                sequenceTimeout = null;
+            }
+
+            // Stop all video playback and remove listeners to prevent late transitions
+            document.getElementById('video-logo').pause();
+            document.getElementById('video-logo').onended = null;
+            document.getElementById('video-loading').pause();
+            document.getElementById('video-loading').onended = null;
+            document.getElementById('video-demoreel').pause();
+            document.getElementById('video-demoreel').onended = null;
+
+            // Hide the skip prompt
+            document.getElementById('prompt-sequence-skip').classList.add('hidden');
+            
+            // Go directly to the Press Start screen
+            setScreen('menu-press-start');
+        };
+
+
         const playVideoSequence = () => {
             const logoVideo = document.getElementById('video-logo');
             const loadingVideo = document.getElementById('video-loading');
             const demoReelVideo = document.getElementById('video-demoreel');
-            const demoReelContainer = document.getElementById('demoreel-container');
-            const demoreelSkipPrompt = document.getElementById('prompt-demoreel-skip');
+            const skipPrompt = document.getElementById('prompt-sequence-skip');
 
-            // --- 1. Logo Video ---
-            setScreen('video-logo');
-            logoVideo.currentTime = 0;
-            logoVideo.play().catch(e => console.error("Logo video playback failed:", e));
-            logoVideo.onended = () => {
-                // --- 2. Loading Video ---
+            isSequenceActive = true;
+            skipPrompt.classList.remove('hidden'); // Show the skip prompt immediately
+
+            // Step 1: Logo Video
+            const startLogo = () => {
+                setScreen('video-logo');
+                logoVideo.currentTime = 0;
+                // Add a catch for error/no-playback to prevent the grey screen issue
+                logoVideo.play().catch(e => {
+                    console.error("Logo video playback failed, skipping to loading:", e);
+                    startLoading(); // Fallback if playback fails
+                });
+                logoVideo.onended = startLoading;
+            }
+
+            // Step 2: Loading Video
+            const startLoading = () => {
+                // Remove previous listener to prevent double triggers
+                logoVideo.onended = null;
+
                 setScreen('video-loading');
                 loadingVideo.currentTime = 0;
-                loadingVideo.loop = true; // Use loop for loading for flexibility
+                loadingVideo.loop = true; 
                 loadingVideo.play().catch(e => console.error("Loading video playback failed:", e));
 
                 // Wait 3 seconds then transition to Demo Reel
-                setTimeout(() => {
+                sequenceTimeout = setTimeout(() => {
                     loadingVideo.pause();
                     loadingVideo.loop = false;
-                    
-                    // --- 3. Demo Reel Video ---
-                    setScreen('demoreel-container');
-                    demoReelVideo.currentTime = 0;
-                    demoReelVideo.play().catch(e => console.error("Demo reel playback failed:", e));
-                    
-                    // Click to Skip/Exit Logic
-                    const goToStartMenu = () => {
-                        demoReelVideo.pause();
-                        demoReelVideo.removeEventListener('ended', goToStartMenu);
-                        demoReelContainer.removeEventListener('click', skipReel);
-                        setScreen('menu-press-start');
-                    };
-
-                    const skipReel = (event) => {
-                        // Prevent accidental click-through if target is a button, etc.
-                        if (event.target === demoReelContainer || event.target === demoReelVideo) {
-                            goToStartMenu();
-                        }
-                    };
-
-                    demoReelVideo.onended = goToStartMenu;
-                    demoReelContainer.addEventListener('click', skipReel);
-                    demoreelSkipPrompt.classList.remove('hidden');
-
-                }, 3000); // 3-second minimum loading screen
+                    startDemoReel();
+                }, 3000); 
             };
+            
+            // Step 3: Demo Reel Video
+            const startDemoReel = () => {
+                // Clear the timeout reference
+                sequenceTimeout = null; 
+
+                setScreen('demoreel-container');
+                demoReelVideo.currentTime = 0;
+                demoReelVideo.play().catch(e => {
+                    console.error("Demo reel playback failed, skipping to press start:", e);
+                    skipAllVideos(); // Fallback if playback fails
+                });
+                
+                // End of all videos sequence
+                demoReelVideo.onended = () => {
+                    demoReelVideo.onended = null;
+                    skipAllVideos(); 
+                };
+            }
+
+            // Start the sequence
+            startLogo();
         };
 
         // Start the process when the window and all resources are loaded
@@ -396,8 +443,9 @@
              // The main app logic will rely on window.App, so define it early
             window.App = window.App || {}; 
             window.App.setScreen = setScreen;
-            // Define other global App functions expected by buttons (App.closeExhibit, App.closeModelInspector, etc.)
-            // These will be properly implemented in App.js but need placeholders for clicks to work.
+            window.App.skipSequence = skipAllVideos; // Expose the skip function globally
+            
+            // Define other global App functions expected by buttons
             window.App.closeExhibit = () => setScreen('overworld');
             window.App.closeModelInspector = () => setScreen(window.App.currentScreenBeforePopup || 'overworld');
             window.App.hideMenu = (id) => setScreen('main-menu');
@@ -405,11 +453,19 @@
             
             playVideoSequence();
 
-            // Set up mute/unmute logic for all videos (assuming they should be muted by default)
+            // Set up mute/unmute logic for all videos 
             [document.getElementById('video-logo'), document.getElementById('video-loading'), document.getElementById('video-demoreel')]
                 .forEach(video => {
                     if (video) { video.muted = true; }
                 });
+
+            // Global Click Listener for Skipping the entire sequence (addresses the user's request)
+            document.body.addEventListener('click', (event) => {
+                // Only skip if the sequence is active and the user didn't click a specific button (like PRESS START)
+                if (isSequenceActive && event.target.tagName !== 'BUTTON') {
+                    skipAllVideos();
+                }
+            });
         });
     </script>
 
