@@ -43,6 +43,9 @@ const App = {
         let currentVidIdx = 0;
 
         const playNext = () => {
+            // Check if sequence was skipped externally before continuing
+            if (videoSeq.style.display === 'none') return;
+
             if (currentVidIdx >= videos.length) {
                 // Sequence done
                 App.skipSequence();
@@ -61,8 +64,11 @@ const App = {
                 placeholder.classList.remove('hidden');
                 // Auto-advance placeholder after delay if video fails
                 setTimeout(() => {
-                    currentVidIdx++;
-                    playNext();
+                    // Only advance if still visible
+                    if (videoSeq.style.display !== 'none') {
+                        currentVidIdx++;
+                        playNext();
+                    }
                 }, 3000); 
             });
         };
@@ -82,11 +88,17 @@ const App = {
         const pressStart = document.getElementById('screen-press-start');
         const mainVideo = document.getElementById('main-video');
 
-        if (videoSeq.style.display !== 'none') {
-            mainVideo.pause();
-            mainVideo.onended = null; // Stop chain
+        // Only act if the video sequence is currently visible
+        if (videoSeq && videoSeq.style.display !== 'none') {
+            console.log("Skipping Intro...");
+            
+            if(mainVideo) {
+                mainVideo.pause();
+                mainVideo.onended = null; // Stop chain
+            }
+            
             videoSeq.style.display = 'none';
-            pressStart.style.display = 'flex';
+            if(pressStart) pressStart.style.display = 'flex';
         }
     },
 
@@ -103,8 +115,15 @@ const App = {
         const videoSeq = document.getElementById('video-sequence');
         const pressStart = document.getElementById('screen-press-start');
 
-        // Global click to skip intro
-        videoSeq.addEventListener('click', App.skipSequence);
+        // 1. Global Document Click Listener (The Fix)
+        // Catches clicks anywhere to ensure skip works
+        document.addEventListener('click', (e) => {
+            // If video sequence is visible, skip it
+            if (videoSeq && videoSeq.style.display !== 'none') {
+                e.preventDefault(); // Prevent accidental interactions underneath
+                App.skipSequence();
+            }
+        });
 
         // Press Start
         document.getElementById('btn-press-start').addEventListener('click', () => {
