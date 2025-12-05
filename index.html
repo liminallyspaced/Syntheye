@@ -3,512 +3,1230 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Synthey Portfolio</title>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <title>SYNTHEYE: Portfolio Adventure</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- THREE.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- THREE.js Orbit Controls (Needed for 360° Inspection) -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Google Fonts for PS1 Vibe -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
-
+        /* Retro/PSX Styling */
         body {
-            background-color: #050505;
-            color: #fff;
-            font-family: 'Share Tech Mono', monospace;
-            overflow-x: hidden;
+            background-color: #000;
+            color: #F0F0F0;
+            overflow: hidden; 
+            font-family: 'Press Start 2P', monospace;
+            cursor: default;
         }
 
-        /* CRT Scanline Effect */
-        .scanlines {
-            background: linear-gradient(
-                to bottom,
-                rgba(255,255,255,0),
-                rgba(255,255,255,0) 50%,
-                rgba(0,0,0,0.2) 50%,
-                rgba(0,0,0,0.2)
-            );
-            background-size: 100% 4px;
-            position: fixed;
-            top: 0; right: 0; bottom: 0; left: 0;
-            z-index: 50;
-            pointer-events: none;
-        }
-
-        /* Retro Sun Animation */
-        .retro-sun {
-            width: 300px;
-            height: 300px;
-            background: linear-gradient(to bottom, #ff00de, #ffaa00);
-            border-radius: 50%;
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-            box-shadow: 0 0 40px #ff00de;
-            clip-path: polygon(
-                0% 0%, 100% 0%, 100% 55%, 
-                0% 55%, 0% 60%, 100% 60%, 
-                100% 65%, 0% 65%, 0% 70%, 
-                100% 70%, 100% 75%, 0% 75%,
-                0% 80%, 100% 80%, 100% 85%,
-                0% 85%, 0% 100%, 100% 100%
-            );
-        }
-
-        /* Moving Grid Floor */
-        .grid-floor {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 50vh;
-            background: 
-                linear-gradient(rgba(18, 16, 16, 0) 0%, #ff00de 100%), 
-                linear-gradient(90deg, rgba(255, 0, 222, 0.3) 1px, transparent 1px), 
-                linear-gradient(rgba(255, 0, 222, 0.3) 1px, transparent 1px);
-            background-size: 100% 100%, 40px 40px, 40px 40px;
-            transform: perspective(500px) rotateX(60deg);
-            transform-origin: bottom;
-            animation: gridMove 2s linear infinite;
-            z-index: -1;
-            opacity: 0.5;
-        }
-
-        @keyframes gridMove {
-            0% { background-position: 0 0, 0 0, 0 0; }
-            100% { background-position: 0 0, 0 40px, 0 40px; }
-        }
-
-        /* Glitch Text Utility */
-        .glitch {
-            position: relative;
-        }
-        .glitch::before, .glitch::after {
-            content: attr(data-text);
+        /* Screen Wrapper */
+        .screen {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: #050505;
-        }
-        .glitch::before {
-            left: 2px;
-            text-shadow: -1px 0 #ff00de;
-            clip: rect(24px, 550px, 90px, 0);
-            animation: glitch-anim-2 3s infinite linear alternate-reverse;
-        }
-        .glitch::after {
-            left: -2px;
-            text-shadow: -1px 0 #00ffff;
-            clip: rect(85px, 550px, 140px, 0);
-            animation: glitch-anim 2.5s infinite linear alternate-reverse;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
         }
 
-        @keyframes glitch-anim {
-            0% { clip: rect(10px, 9999px, 30px, 0); }
-            20% { clip: rect(50px, 9999px, 10px, 0); }
-            40% { clip: rect(20px, 9999px, 80px, 0); }
-            60% { clip: rect(80px, 9999px, 40px, 0); }
-            80% { clip: rect(40px, 9999px, 100px, 0); }
-            100% { clip: rect(10px, 9999px, 70px, 0); }
+        /* Menu Card Styling */
+        .menu-card {
+            background-color: #102048; /* PS1 Blue/Dark */
+            border: 4px solid #F0F0F0;
+            box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.8);
+            width: 90%;
+            max-width: 450px;
         }
-        @keyframes glitch-anim-2 {
-            0% { clip: rect(60px, 9999px, 10px, 0); }
-            20% { clip: rect(20px, 9999px, 40px, 0); }
-            40% { clip: rect(80px, 9999px, 20px, 0); }
-            60% { clip: rect(10px, 9999px, 80px, 0); }
-            80% { clip: rect(50px, 9999px, 90px, 0); }
-            100% { clip: rect(30px, 9999px, 60px, 0); }
+        .title-bar {
+            background-color: #38508f;
+            padding: 0.5rem 1rem;
+            border-bottom: 2px solid #F0F0F0;
+        }
+        .menu-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            transition: background-color 0.1s;
+        }
+        .menu-item:hover, .menu-item.selected {
+            background-color: #38508f;
+            text-shadow: 1px 1px 0 #000;
         }
 
-        .neon-box {
-            box-shadow: 0 0 10px #00ffff, inset 0 0 10px #00ffff;
+        /* UI Overlay / Prompts */
+        #ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Allows clicks to pass through to the canvas */
+            z-index: 20;
+        }
+
+        /* Interaction Prompt */
+        #interaction-prompt {
+            position: absolute;
+            bottom: 5%; 
+            padding: 8px 16px;
+            background-color: #000000;
+            color: #ffffff;
+            border: 2px solid #ff0000;
+            box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.7);
+            animation: pulse 1s infinite alternate;
+            left: 50%;
+            transform: translateX(-50%);
+            pointer-events: none;
+        }
+
+        @keyframes pulse {
+            from { opacity: 0.9; }
+            to { opacity: 1; transform: scale(1.02) translateX(-50%); }
         }
         
-        .neon-text-pink {
-            text-shadow: 0 0 5px #ff00de, 0 0 10px #ff00de, 0 0 20px #ff00de;
+        /* Transition Overlay (Fade) */
+        #transition-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: black;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            z-index: 100;
+            pointer-events: none;
         }
         
-        .neon-text-blue {
-            text-shadow: 0 0 5px #00ffff, 0 0 10px #00ffff, 0 0 20px #00ffff;
+        /* Popup Styling */
+        .popup-card {
+            background-color: #1A4D2E; /* PS1 Green/Dark */
+            border: 4px solid #F0F0F0;
+            box-shadow: 10px 10px 0px rgba(0, 0, 0, 0.8);
+            width: 95%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            font-family: Inter, sans-serif; /* Readable font for long text */
         }
-
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar {
-            width: 10px;
+        .close-button {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            background-color: #ff0000;
+            color: white;
+            border: none;
+            font-family: 'Press Start 2P', monospace;
+            cursor: pointer;
+            box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.5);
+            z-index: 30; /* Ensure button is above other elements */
         }
-        ::-webkit-scrollbar-track {
-            background: #111;
+        
+        /* Inspection View Specifics */
+        #inspection-view-container {
+            width: 100%;
+            height: 100%;
+            background-color: #111111;
         }
-        ::-webkit-scrollbar-thumb {
-            background: #ff00de;
+        
+        /* CRT Filter */
+        .crt-active:after {
+            content: " ";
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 9999;
+            pointer-events: none;
+            background-size: 100% 4px, 3px 100%;
+            opacity: 0.9;
         }
+        
     </style>
 </head>
-<body>
-    <div id="root"></div>
+<body class="font-mono bg-black crt-active">
 
-    <script type="text/babel" data-presets="react">
-        const { useState, useEffect, useRef } = React;
+    <!-- Transition Overlay (Used for Fades and Door Animations) -->
+    <div id="transition-overlay" class="hidden flex-col justify-center items-center">
+        <!-- Optional: Door Animation Placeholder -->
+        <p id="transition-text" class="text-xl text-white hidden">LOADING...</p>
+    </div>
 
-        // --- Robust Inline Icons Component ---
-        const Icon = ({ children, className, size = 24, ...props }) => (
-            <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                width={size} 
-                height={size} 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="2" 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                className={className} 
-                {...props}
-            >
-                {children}
-            </svg>
-        );
-
-        const Monitor = (props) => (
-            <Icon {...props}>
-                <rect width="20" height="14" x="2" y="3" rx="2" />
-                <line x1="8" x2="16" y1="21" y2="21" />
-                <line x1="12" x2="12" y1="17" y2="21" />
-            </Icon>
-        );
-
-        const Terminal = (props) => (
-            <Icon {...props}>
-                <polyline points="4 17 10 11 4 5" />
-                <line x1="12" x2="20" y1="19" y2="19" />
-            </Icon>
-        );
-
-        const Cpu = (props) => (
-            <Icon {...props}>
-                <rect width="16" height="16" x="4" y="4" rx="2" />
-                <rect width="6" height="6" x="9" y="9" rx="1" />
-                <path d="M15 2v2" /><path d="M15 20v2" />
-                <path d="M2 15h2" /><path d="M2 9h2" />
-                <path d="M20 15h2" /><path d="M20 9h2" />
-                <path d="M9 2v2" /><path d="M9 20v2" />
-            </Icon>
-        );
-
-        const ExternalLink = (props) => (
-            <Icon {...props}>
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                <polyline points="15 3 21 3 21 9" />
-                <line x1="10" x2="21" y1="14" y2="3" />
-            </Icon>
-        );
-
-        const Github = (props) => (
-            <Icon {...props}>
-                <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
-                <path d="M9 18c-4.51 2-5-2-7-2" />
-            </Icon>
-        );
-
-        const Twitter = (props) => (
-            <Icon {...props}>
-                <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z" />
-            </Icon>
-        );
-
-        const Mail = (props) => (
-            <Icon {...props}>
-                <rect width="20" height="16" x="2" y="4" rx="2" />
-                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-            </Icon>
-        );
-
-        // --- Intro Sequence Component ---
-        const IntroSequence = ({ onComplete }) => {
-            const [text, setText] = useState("");
-            const [stage, setStage] = useState(0);
-            const isMounted = useRef(true);
-
-            useEffect(() => {
-                const sequence = async () => {
-                    if (!isMounted.current) return;
-
-                    // Stage 0: Boot sequence
-                    const bootText = "INITIALIZING SYSTEM... LOADING ASSETS... CONNECTING TO NEURAL NET...";
-                    for (let i = 0; i < bootText.length; i++) {
-                        if (!isMounted.current) return;
-                        setText(prev => prev + bootText[i]);
-                        await new Promise(r => setTimeout(r, 30));
-                    }
-                    
-                    await new Promise(r => setTimeout(r, 500));
-                    if (!isMounted.current) return;
-                    setStage(1);
-
-                    // Stage 1: The Reveal
-                    await new Promise(r => setTimeout(r, 2000));
-                    if (!isMounted.current) return;
-                    
-                    onComplete();
-                };
-
-                sequence();
-
-                return () => { isMounted.current = false; };
-            }, [onComplete]);
-
-            // Note: z-60 ensures it's above the scanlines (z-50)
-            return (
-                <div className="fixed inset-0 bg-black z-[60] flex flex-col items-center justify-center overflow-hidden">
-                    {/* VHS Overlay */}
-                    <div className="absolute top-10 left-10 text-xl font-bold text-white opacity-50 font-mono animate-pulse">
-                        PLAY &#9658;
-                    </div>
-                    <div className="absolute bottom-10 right-10 text-xl font-bold text-white opacity-50 font-mono">
-                        SP - 1986
-                    </div>
-                    
-                    {/* Content */}
-                    <div className="relative z-10 text-center">
-                        {stage === 0 && (
-                            <div className="text-green-400 text-xl md:text-2xl max-w-2xl px-4 h-24">
-                                > {text}<span className="animate-pulse">_</span>
-                            </div>
-                        )}
-                        
-                        {stage === 1 && (
-                            <div className="retro-sun animate-pulse"></div>
-                        )}
-
-                        {stage === 1 && (
-                            <div className="mt-96 relative z-20">
-                                <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-400 tracking-widest uppercase transform skew-x-12 glitch" data-text="SYNTHEY">
-                                    SYNTHEY
-                                </h1>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Instruction - The Critical Part */}
-                    <div className="absolute bottom-20 text-center w-full animate-bounce">
-                        <span className="bg-gray-900 border border-gray-700 px-4 py-2 rounded text-xs md:text-sm text-gray-400 uppercase tracking-widest">
-                            Press [Spacebar] to Skip Intro
-                        </span>
-                    </div>
+    <!-- 1. Main Menu Screen -->
+    <div id="main-menu" class="screen flex-col">
+        <h1 class="text-4xl sm:text-5xl mb-12 text-center text-white p-4">SYNTHEYE</h1>
+        <div class="menu-card p-2">
+            <h2 class="title-bar text-xl text-white mb-2">ACCESS MENU V1.0</h2>
+            <div id="menu-options" class="divide-y divide-ps1-gray">
+                <div class="menu-item selected" data-action="start" onclick="handleMenuClick(this, 0)">
+                    <span class="selection-arrow mr-4" style="visibility: visible;">►</span>
+                    <span>START ADVENTURE</span>
                 </div>
-            );
+                <div class="menu-item" data-action="options" onclick="handleMenuClick(this, 1)">
+                    <span class="selection-arrow mr-4" style="visibility: hidden;">►</span>
+                    <span>OPTIONS</span>
+                </div>
+                <div class="menu-item" data-action="how-to-play" onclick="handleMenuClick(this, 2)">
+                    <span class="selection-arrow mr-4" style="visibility: hidden;">►</span>
+                    <span>HOW TO PLAY</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Overworld UI Screen (Container for 3D) -->
+    <div id="overworld-ui" class="screen hidden flex-col">
+        <div id="three-container" class="w-full h-full absolute">
+            <!-- THREE.js Canvas will be injected here -->
+        </div>
+
+        <!-- UI Overlay for Prompts and Buttons -->
+        <div id="ui-overlay">
+            <!-- Interaction Prompt -->
+            <div id="interaction-prompt" class="absolute bottom-5% p-2 bg-black border border-red-500 hidden text-xs">
+                PRESS [E] / [CLICK] TO INTERACT
+            </div>
+            
+            <!-- Room Title Display -->
+             <div id="room-title" class="absolute top-4 left-4 text-sm bg-black bg-opacity-70 p-2 rounded-sm border border-gray-500">
+                ROOM: UNKNOWN
+            </div>
+            
+            <!-- Game Menu Buttons (NEW) -->
+            <div id="game-menu-buttons" class="absolute bottom-4 right-4 flex space-x-4 pointer-events-auto">
+                <button class="px-4 py-2 bg-gray-700 hover:bg-gray-500 text-white text-xs font-mono rounded-md shadow-lg" onclick="showMenu('options-menu')">[ ESC ] OPTIONS</button>
+                <button class="px-4 py-2 bg-red-800 hover:bg-red-600 text-white text-xs font-mono rounded-md shadow-lg" onclick="returnToMainMenu()">[ M ] MAIN MENU</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 3. Standard Text/Info Popup Screen -->
+    <div id="text-popup" class="screen hidden bg-black bg-opacity-70">
+        <div class="popup-card p-4">
+            <!-- CLOSE BUTTON: Calls closePopup() -->
+            <button class="close-button" onclick="closePopup()">[ ESC ] BACK</button>
+            <h2 id="popup-title" class="title-bar text-2xl mb-4 text-white font-mono">TEXT TITLE</h2>
+            <div class="p-2 text-sm text-ps1-light" style="font-family: Inter, sans-serif;">
+                <p id="popup-text" class="whitespace-pre-wrap"></p>
+                <p id="popup-clue-status" class="mt-4 text-yellow-300 font-mono text-xs"></p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 4. Inspection (360° View) Popup Screen -->
+    <div id="inspection-popup" class="screen hidden bg-black bg-opacity-70">
+        <div class="popup-card p-4 flex flex-col items-center">
+             <!-- CLOSE BUTTON: Calls closePopup() -->
+            <button class="close-button" onclick="closePopup()">[ ESC ] EXIT INSPECT</button>
+            <h2 id="inspect-title" class="title-bar text-xl mb-2 w-full text-white font-mono">OBJECT INSPECTION</h2>
+            
+            <div class="flex flex-col lg:flex-row w-full h-full min-h-[500px]">
+                <!-- 3D Inspection Area -->
+                <div id="inspection-view-container" class="lg:w-3/4 w-full h-96 lg:h-auto bg-gray-900 border border-gray-700">
+                    <!-- Inspection View Canvas will be here -->
+                </div>
+                
+                <!-- Description Panel -->
+                <div class="lg:w-1/4 w-full p-4 bg-gray-800 text-sm font-sans">
+                    <p id="inspect-description" class="text-ps1-light whitespace-pre-wrap"></p>
+                    <p id="inspect-clue-status" class="mt-4 text-red-400 font-mono text-xs"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 5. Options Menu Overlay -->
+    <div id="options-menu" class="screen hidden bg-black bg-opacity-70">
+        <div class="menu-card p-4">
+            <h2 class="title-bar text-xl text-white mb-4">OPTIONS</h2>
+            <div class="space-y-3 text-sm">
+                <div class="flex justify-between items-center border-b border-gray-600 pb-2">
+                    <span>CRT FILTER:</span>
+                    <button id="toggle-crt" class="px-3 py-1 bg-red-600 text-white font-mono" data-setting="on">ON</button>
+                </div>
+                <!-- BACK BUTTON: Calls hideMenu() -->
+                <button class="w-full mt-4 p-2 bg-gray-500 text-black font-mono shadow-md" onclick="hideMenu('options-menu')">[ B ] BACK</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 6. How To Play Menu -->
+    <div id="how-to-play-menu" class="screen hidden bg-black bg-opacity-70">
+        <div class="menu-card p-4 text-sm font-sans">
+            <h2 class="title-bar text-xl text-white mb-4 font-mono">HOW TO PLAY</h2>
+            <p class="mb-2 font-mono text-xs">MOVEMENT MODES:</p>
+            <ul class="list-disc list-inside ml-4 mb-4 text-xs">
+                <li>**WASD / ARROWS:** Direct movement relative to the camera view.</li>
+                <li>**POINT & CLICK:** Click on the floor to pathfind to a location.</li>
+            </ul>
+            <p class="mb-2 font-mono text-xs">INTERACTION:</p>
+            <ul class="list-disc list-inside ml-4 mb-4 text-xs">
+                <li>**KEY [E] / LEFT CLICK:** Interact with nearby hotspots (Doors, Objects).</li>
+                <li>**INSPECTION:** Click and drag objects in the 360° view.</li>
+            </ul>
+             <p class="mb-2 font-mono text-xs">GOAL:</p>
+            <p class="mb-4">FIND THE THREE CLUES HIDDEN IN THE HALL, GALLERY, AND ARCHIVE TO UNLOCK THE SECRET ROOM.</p>
+            <!-- BACK BUTTON: Calls hideMenu() -->
+            <button class="w-full mt-4 p-2 bg-gray-500 text-black font-mono shadow-md" onclick="hideMenu('how-to-play-menu')">[ B ] BACK</button>
+        </div>
+    </div>
+
+    <script>
+        // =================================================================================
+        // --- 1. CORE CONFIGURATION & CONTENT ---
+        // =================================================================================
+        
+        // --- STATE Management (Matches Developer Blueprint) ---
+        const STATE = {
+            screen: 'main-menu', // main-menu, overworld, popup, menu-overlay
+            menuIndex: 0,
+            isCrtActive: true,
+            
+            // Blueprint keys
+            current_room: 'ROOM_HALL',
+            interaction_mode: 'OVERWORLD', // OVERWORLD, POPUP_TEXT, POPUP_INSPECT, MENU_PAUSE, TRANSITION
+            player_pos: new THREE.Vector3(0, 1, 0),
+            active_target: null, // THREE.Vector3 target for point-and-click
+            active_hotspot: null, // Reference to the current interactable object
+            
+            // Puzzle State
+            clues_found: [false, false, false], // [Clock, Painting, Plaque]
+            secret_unlocked: false,
+            
+            // Movement Config
+            speed: 0.1,
+            move_tolerance: 0.2, // Distance threshold to stop pathfinding
         };
 
-        // --- Main App Component ---
-        const App = () => {
-            const [showIntro, setShowIntro] = useState(true);
-            const [activeSection, setActiveSection] = useState('home');
+        // --- Portfolio Content (for Popups) ---
+        const PORTFOLIO_CONTENT = {
+            // Puzzle Clues
+            clue_clock: { title: 'Clock Note', text: "THE HOUR HAND POINTS TO ONE. NOT ONE O'CLOCK, BUT ONE CLUE.", type: 'puzzle' },
+            clue_painting: { title: 'Etched Symbol', text: "A ROUGHLY CARVED SUN SYMBOL. IT LOOKS LIKE A CLOCK FACE AT 9.", type: 'puzzle' },
+            clue_plaque: { title: 'Archival Date', text: "EARLY DRAFT SUBMITTED ON: 05-02-1998. MAYBE THE MONTH IS IMPORTANT.", type: 'puzzle' },
+            
+            // Standard Exhibits
+            gallery_model1: { title: '3D Character Model: The Watcher', text: "LOW-POLY MODEL FROM A 2024 PROJECT. TEXTURES USE STRICT COLOR PALETTE. CLICK AND DRAG TO ROTATE.", type: 'inspect' },
+            archive_concept: { title: 'Concept Art Case', text: "THIS GLASS CASE CONTAINS EARLY CONCEPT SKETCHES. THE PROCESS WAS MESSY, BUT ESSENTIAL.", type: 'text' },
+            
+            // Secret Ending
+            secret_ending: { title: 'Final Revelation', text: "CONGRATULATIONS. YOU HAVE UNLOCKED THE FINAL PIECE.\n\nTHIS IS THE 'ABOUT ME' MONOLOGUE.\n\nMY NAME IS NICHOLAS SIEGEL, AND I AM AVAILABLE FOR CONTRACT WORK. THANK YOU FOR EXPLORING MY ADVENTURE.", type: 'text' }
+        };
+        
+        // --- Room Geometry and Hotspots (Matches Blueprint) ---
+        const ROOM_DATA = {
+            // Hotspot Type: 'inspect' (360 view), 'text' (Standard Popup), 'door' (Transition)
+            ROOM_HALL: {
+                name: 'MAIN HALL',
+                camera: { pos: [10, 5, 5], target: [0, 1, 0] },
+                spawn: new THREE.Vector3(0, 1, 0),
+                geometry: [
+                    { name: 'floor', dim: [20, 0.1, 20], pos: [0, 0, 0], color: 0x654321, collider: false }, 
+                    { name: 'wall_n', dim: [20, 10, 0.5], pos: [0, 5, -10], color: 0x555555, collider: true },
+                    { name: 'wall_s', dim: [20, 10, 0.5], pos: [0, 5, 10], color: 0x555555, collider: true },
+                    { name: 'wall_e', dim: [0.5, 10, 20], pos: [10, 5, 0], color: 0x555555, collider: true },
+                    { name: 'wall_w', dim: [0.5, 10, 20], pos: [-10, 5, 0], color: 0x555555, collider: true },
+                    // Clue 0
+                    { name: 'clock', dim: [1, 3, 1], pos: [8, 1.5, -8], color: 0x3d2719, collider: true, hotspot: { type: 'inspect', clue: 0, content_id: 'clue_clock', prompt: 'GRANDFATHER CLOCK' } }
+                ],
+                hotspots: [
+                    { name: 'door_gallery', pos: [0, 1, -10], radius: 1.5, type: 'door', target_room: 'ROOM_GALLERY', target_spawn: new THREE.Vector3(0, 1, 9), prompt: 'GALLERY DOOR' },
+                    { name: 'door_archive', pos: [-10, 1, 0], radius: 1.5, type: 'door', target_room: 'ROOM_ARCHIVE', target_spawn: new THREE.Vector3(9, 1, 0), prompt: 'ARCHIVE DOOR' },
+                    { name: 'door_secret', pos: [10, 1, 0], radius: 1.5, type: 'door', target_room: 'ROOM_SECRET', target_spawn: new THREE.Vector3(-9, 1, 0), locked: true, prompt: 'LOCKED SECRET DOOR' }
+                ],
+            },
+            ROOM_GALLERY: {
+                name: 'GALLERY ROOM',
+                camera: { pos: [-15, 4, 0], target: [0, 1, 0] },
+                spawn: new THREE.Vector3(0, 1, 9),
+                geometry: [
+                    { name: 'floor', dim: [20, 0.1, 20], pos: [0, 0, 0], color: 0x333333, collider: false },
+                    { name: 'pedestal1', dim: [2, 3, 2], pos: [5, 1.5, -5], color: 0xAAAAAA, collider: true, hotspot: { type: 'inspect', content_id: 'gallery_model1', prompt: 'PEDESTAL: WATCHER' } },
+                    // Clue 1
+                    { name: 'pedestal2', dim: [2, 3, 2], pos: [5, 1.5, 5], color: 0xAAAAAA, collider: true, hotspot: { type: 'inspect', clue: 1, content_id: 'clue_painting', prompt: 'PEDESTAL: ETCHED ART' } }
+                ],
+                hotspots: [
+                    { name: 'door_hall', pos: [0, 1, 10], radius: 1.5, type: 'door', target_room: 'ROOM_HALL', target_spawn: new THREE.Vector3(0, 1, 9), prompt: 'MAIN HALL DOOR' },
+                ],
+            },
+            ROOM_ARCHIVE: {
+                name: 'MUSEUM ARCHIVE',
+                camera: { pos: [0, 8, -12], target: [0, 1, 0] },
+                spawn: new THREE.Vector3(9, 1, 0),
+                geometry: [
+                    { name: 'floor', dim: [20, 0.1, 20], pos: [0, 0, 0], color: 0x1A4D2E, collider: false },
+                    { name: 'case1', dim: [5, 1.5, 2], pos: [-5, 0.75, 5], color: 0x88AA88, collider: true, hotspot: { type: 'text', content_id: 'archive_concept', prompt: 'CONCEPT ART CASE' } },
+                    // Clue 2
+                    { name: 'plaque', dim: [0.1, 1, 1], pos: [-5, 1, -5], color: 0xCDA434, collider: true, hotspot: { type: 'text', clue: 2, content_id: 'clue_plaque', prompt: 'MUSEUM PLAQUE' } }
+                ],
+                hotspots: [
+                    { name: 'door_hall', pos: [-10, 1, 0], radius: 1.5, type: 'door', target_room: 'ROOM_HALL', target_spawn: new THREE.Vector3(-9, 1, 0), prompt: 'MAIN HALL DOOR' },
+                ],
+            },
+            ROOM_SECRET: {
+                name: 'SECRET SANCTUARY',
+                camera: { pos: [5, 3, -5], target: [0, 1, 0] },
+                spawn: new THREE.Vector3(-9, 1, 0),
+                geometry: [
+                    { name: 'floor', dim: [10, 0.1, 10], pos: [0, 0, 0], color: 0x000000, collider: false },
+                    { name: 'wall_final', dim: [0.5, 10, 10], pos: [-5, 5, 0], color: 0x800080, collider: true },
+                    { name: 'final_exhibit', dim: [2, 2, 2], pos: [0, 1, 0], color: 0xFF00FF, collider: true, hotspot: { type: 'text', content_id: 'secret_ending', prompt: 'FINAL MONOLITH' } }
+                ],
+                hotspots: [
+                    { name: 'door_hall', pos: [10, 1, 0], radius: 1.5, type: 'door', target_room: 'ROOM_HALL', target_spawn: new THREE.Vector3(9, 1, 0), prompt: 'EXIT DOOR' },
+                ],
+            }
+        };
 
-            // Skip Logic: Listens for Spacebar globally
-            useEffect(() => {
-                const handleKeyDown = (e) => {
-                    // Only trigger if intro is showing
-                    if (showIntro && e.code === 'Space') {
-                        e.preventDefault(); // Prevent page scroll
-                        finishIntro();
-                    }
-                };
+        // =================================================================================
+        // --- 2. GLOBAL UTILITY FUNCTIONS ---
+        // =================================================================================
 
-                window.addEventListener('keydown', handleKeyDown);
-                return () => window.removeEventListener('keydown', handleKeyDown);
-            }, [showIntro]);
+        const menuItems = document.querySelectorAll('#menu-options .menu-item');
+        const body = document.body;
+        let renderer, scene, camera, playerMesh;
+        let inspectionCamera, inspectionControls, inspectionScene, inspectionRenderer;
+        let controls = { w: false, a: false, s: false, d: false }; 
+        let currentRoomGroup = new THREE.Group();
+        let collidableMeshes = [];
+        let raycaster = new THREE.Raycaster();
 
-            const finishIntro = () => {
-                setShowIntro(false);
-            };
+        /**
+         * Sets the visible screen and updates the global STATE.screen variable.
+         * @param {string} newScreen - The ID of the screen element to show (e.g., 'main-menu').
+         */
+        function setScreen(newScreen) {
+            document.querySelectorAll('.screen').forEach(el => el.classList.add('hidden'));
+            document.getElementById(newScreen).classList.remove('hidden');
+            
+            // Set the STATE.screen based on the container ID for robust state checks
+            if (newScreen === 'main-menu') {
+                STATE.screen = 'main-menu'; 
+            } else if (newScreen === 'overworld-ui') {
+                STATE.screen = 'overworld';
+                STATE.interaction_mode = 'OVERWORLD'; // Guaranteed exit from pause/popup
+            } else if (newScreen === 'text-popup' || newScreen === 'inspection-popup') {
+                STATE.screen = 'popup';
+                // Note: interaction_mode is set in openPopup
+            }
+        }
+        
+        // --- Menu Logic ---
+        function updateMenuSelection() {
+            menuItems.forEach((item, index) => {
+                const isSelected = index === STATE.menuIndex;
+                item.classList.toggle('selected', isSelected);
+                item.querySelector('.selection-arrow').style.visibility = isSelected ? 'visible' : 'hidden';
+            });
+        }
+        
+        // NEW: Handles click events on main menu items
+        function handleMenuClick(element, index) {
+            STATE.menuIndex = index;
+            updateMenuSelection();
+            handleMenuAction(element.dataset.action);
+        }
 
-            const projects = [
-                {
-                    title: "Neon Racer",
-                    desc: "A high-speed WebGL racing game built with Three.js.",
-                    tech: ["React", "Three.js", "WebGL"],
-                    color: "border-pink-500",
-                    icon: <Monitor size={40} className="text-pink-500" />
-                },
-                {
-                    title: "CyberDeck CLI",
-                    desc: "Terminal-based portfolio template for developers.",
-                    tech: ["Node.js", "Ink", "TypeScript"],
-                    color: "border-cyan-500",
-                    icon: <Terminal size={40} className="text-cyan-500" />
-                },
-                {
-                    title: "SynthAI",
-                    desc: "Generative music AI wrapped in a retro interface.",
-                    tech: ["Python", "TensorFlow", "React"],
-                    color: "border-purple-500",
-                    icon: <Cpu size={40} className="text-purple-500" />
+        function handleMenuAction(action) {
+            if (action === 'start') {
+                startOverworld();
+            } else if (action === 'options') {
+                showMenu('options-menu');
+            } else if (action === 'how-to-play') {
+                showMenu('how-to-play-menu');
+            }
+        }
+        
+        function showMenu(menuId) {
+            document.getElementById(menuId).classList.remove('hidden');
+            STATE.interaction_mode = 'MENU_PAUSE'; // Pause overworld actions
+            STATE.screen = 'menu-overlay'; // Use dedicated state for menus
+        }
+
+        function hideMenu(menuId) {
+            document.getElementById(menuId).classList.add('hidden');
+            // Only revert to OVERWORLD if we are coming from a pause state
+            if (STATE.interaction_mode === 'MENU_PAUSE') {
+                STATE.interaction_mode = 'OVERWORLD'; 
+                STATE.screen = 'overworld'; // Return screen state to overworld
+            }
+        }
+        
+        /**
+         * Resets the game state and returns the player to the main menu.
+         */
+        function returnToMainMenu() {
+            // Perform a soft reset of the game state
+            STATE.clues_found = [false, false, false];
+            STATE.secret_unlocked = false;
+            STATE.current_room = 'ROOM_HALL';
+            STATE.player_pos.set(0, 1, 0); // Reset player position
+            STATE.active_target = null;
+            STATE.active_hotspot = null;
+            
+            // Clean up Three.js objects (remove current room)
+            if (currentRoomGroup) {
+                scene.remove(currentRoomGroup);
+                currentRoomGroup = new THREE.Group();
+                collidableMeshes = [];
+            }
+            
+            // Go back to main menu
+            setScreen('main-menu');
+        }
+
+
+        // --- Popup Logic ---
+        function openPopup(content) {
+            STATE.active_target = null; // Cancel any movement
+            if (content.type === 'text' || content.type === 'puzzle') {
+                const data = PORTFOLIO_CONTENT[content.content_id];
+                document.getElementById('popup-title').textContent = data.title.toUpperCase();
+                document.getElementById('popup-text').textContent = data.text.toUpperCase();
+                
+                // Show clue status if relevant
+                let clueStatus = '';
+                if (content.clue !== undefined) {
+                    setClueFound(content.clue);
+                    clueStatus = STATE.clues_found[content.clue] ? "CLUE LOGGED" : "CLUE FOUND: CHECK LOG";
                 }
-            ];
+                document.getElementById('popup-clue-status').textContent = clueStatus;
+                
+                setScreen('text-popup');
+                STATE.interaction_mode = 'POPUP_TEXT';
 
-            return (
-                <div className="min-h-screen relative font-mono text-gray-100 selection:bg-pink-500 selection:text-white">
-                    {/* Scanlines Overlay - Always On (z-50) */}
-                    <div className="scanlines"></div>
+            } else if (content.type === 'inspect') {
+                const data = PORTFOLIO_CONTENT[content.content_id];
+                document.getElementById('inspect-title').textContent = data.title.toUpperCase();
+                document.getElementById('inspect-description').textContent = data.text.toUpperCase();
+                
+                // Show clue status if relevant
+                let clueStatus = '';
+                if (content.clue !== undefined) {
+                    setClueFound(content.clue);
+                    clueStatus = STATE.clues_found[content.clue] ? "CLUE LOGGED" : "CLUE FOUND: CHECK LOG";
+                }
+                document.getElementById('inspect-clue-status').textContent = clueStatus;
+
+                setScreen('inspection-popup');
+                STATE.interaction_mode = 'POPUP_INSPECT';
+                startInspectionView(content.content_id);
+            }
+        }
+
+        /**
+         * Closes any active popup (text or inspection) and reliably returns the
+         * game state to OVERWORLD.
+         */
+        function closePopup() {
+            // 1. Force stop the separate 3D inspection view
+            stopInspectionView();
+            
+            // 2. Set the visible screen back to the overworld UI
+            // The setScreen function ensures STATE.interaction_mode is reset to 'OVERWORLD'.
+            setScreen('overworld-ui'); 
+        }
+        
+        // --- CRT Toggle ---
+        const toggleCrtButton = document.getElementById('toggle-crt');
+        if (toggleCrtButton) {
+            toggleCrtButton.onclick = () => {
+                STATE.isCrtActive = !STATE.isCrtActive;
+                body.classList.toggle('crt-active', STATE.isCrtActive);
+                toggleCrtButton.textContent = STATE.isCrtActive ? 'ON' : 'OFF';
+            };
+        }
+
+
+        // =================================================================================
+        // --- 3. THREE.JS SCENE AND ROOM MANAGEMENT ---
+        // =================================================================================
+
+        function initThree() {
+            // Main Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio / 2); // PS1 low-res aesthetic
+            document.getElementById('three-container').appendChild(renderer.domElement);
+
+            // Main Scene and Camera
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a0a); 
+            scene.fog = new THREE.Fog(0x111111, 10, 40); 
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+            
+            // Player Character (Red Avatar)
+            const playerGeometry = new THREE.BoxGeometry(1, 2, 1);
+            const playerMaterial = new THREE.MeshLambertMaterial({ color: 0xFF0000 }); 
+            playerMesh = new THREE.Mesh(playerGeometry, playerMaterial);
+            playerMesh.position.y = 1; 
+            scene.add(playerMesh);
+            
+            // Lighting
+            scene.add(new THREE.AmbientLight(0x404040, 3));
+            const directionalLight = new THREE.DirectionalLight(0xFFFFFF, 2);
+            directionalLight.position.set(20, 30, 10);
+            scene.add(directionalLight);
+
+            window.addEventListener('resize', onWindowResize, false);
+            document.getElementById('three-container').addEventListener('mousedown', handleMouseDown);
+            
+            // Pre-load all room geometry but only add the current room's group to the scene
+            loadAllRooms();
+        }
+
+        function loadAllRooms() {
+            // Create a group for all room meshes to simplify switching
+            for (const key in ROOM_DATA) {
+                const roomConfig = ROOM_DATA[key];
+                roomConfig.group = new THREE.Group();
+                roomConfig.colliders = []; // Store collider positions and dimensions
+
+                // Add Geometry
+                roomConfig.geometry.forEach(g => {
+                    const geo = new THREE.BoxGeometry(g.dim[0], g.dim[1], g.dim[2]);
+                    const mat = new THREE.MeshLambertMaterial({ color: g.color });
+                    const mesh = new THREE.Mesh(geo, mat);
                     
-                    {/* Moving Grid - Always On Background */}
-                    <div className="grid-floor fixed"></div>
+                    // CRITICAL FIX: Set the mesh name to enable reliable floor finding
+                    mesh.name = g.name; 
+                    
+                    mesh.position.set(g.pos[0], g.pos[1], g.pos[2]);
+                    roomConfig.group.add(mesh);
+                    
+                    // Store collider data
+                    if (g.collider) {
+                        roomConfig.colliders.push({ 
+                            pos: mesh.position, 
+                            dim: new THREE.Vector3(g.dim[0], g.dim[1], g.dim[2]) 
+                        });
+                    }
+                    
+                    // Attach hotspot data directly to the mesh for interaction logic
+                    if (g.hotspot) {
+                        mesh.userData.hotspot = g.hotspot;
+                        mesh.userData.isMeshHotspot = true; // Flag for raycasting
+                    }
+                });
 
-                    {/* Intro Layer (z-60) */}
-                    {showIntro && <IntroSequence onComplete={finishIntro} />}
+                // Add Door/Hotspot indicators (simple cylinder)
+                roomConfig.hotspots.forEach(h => {
+                    const hotspotGeo = new THREE.CylinderGeometry(0.5, 0.5, 2, 8);
+                    const hotspotMat = new THREE.MeshBasicMaterial({ color: h.locked ? 0xFF0000 : 0x00FF00, transparent: true, opacity: 0.5 });
+                    const mesh = new THREE.Mesh(hotspotGeo, hotspotMat);
+                    mesh.position.set(h.pos.x, 1, h.pos.z);
+                    mesh.userData.hotspot = h;
+                    mesh.userData.isHotspot = true; // Flag for raycasting
+                    roomConfig.group.add(mesh);
+                });
+            }
+        }
+        
+        function setRoom(roomKey, spawnPoint = null) {
+            // 1. Remove old room geometry
+            if (currentRoomGroup) {
+                scene.remove(currentRoomGroup);
+            }
+            
+            // 2. Load new room geometry and set camera
+            const roomConfig = ROOM_DATA[roomKey];
+            currentRoomGroup = roomConfig.group;
+            collidableMeshes = roomConfig.colliders; // Update collision objects
+            scene.add(currentRoomGroup);
+            
+            // 3. Set Camera
+            camera.position.set(...roomConfig.camera.pos);
+            camera.lookAt(...roomConfig.camera.target);
+            
+            // 4. Set Player Spawn Position
+            STATE.current_room = roomKey;
+            const newPos = spawnPoint || roomConfig.spawn;
+            playerMesh.position.copy(newPos);
+            STATE.player_pos.copy(newPos);
+            
+            // 5. Update UI
+            document.getElementById('room-title').textContent = `ROOM: ${roomConfig.name.toUpperCase()}`;
+        }
+        
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio / 2);
+        }
+        
+        // --- Transition Logic (Silent Hill Style) ---
+        function startTransition(targetRoomKey, targetSpawn) {
+            if (STATE.interaction_mode !== 'OVERWORLD') return;
+            STATE.interaction_mode = 'TRANSITION';
+            STATE.active_target = null;
+            
+            const overlay = document.getElementById('transition-overlay');
+            overlay.classList.remove('hidden');
+            document.getElementById('transition-text').classList.remove('hidden');
 
-                    {/* Main Content Layer (z-10) */}
-                    {!showIntro && (
-                        <div className="relative z-10 transition-opacity duration-1000 opacity-100">
-                            
-                            {/* Navbar */}
-                            <nav className="fixed top-0 w-full z-50 bg-black/80 backdrop-blur-sm border-b border-pink-500/30">
-                                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                                    <div className="flex items-center justify-between h-16">
-                                        <div className="flex-shrink-0">
-                                            <span className="text-2xl font-bold tracking-wider neon-text-pink italic">SYNTHEY</span>
-                                        </div>
-                                        <div className="hidden md:block">
-                                            <div className="ml-10 flex items-baseline space-x-8">
-                                                {['home', 'projects', 'about', 'contact'].map((item) => (
-                                                    <button
-                                                        key={item}
-                                                        onClick={() => setActiveSection(item)}
-                                                        className={`uppercase tracking-widest text-sm hover:text-cyan-400 transition-colors ${activeSection === item ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-gray-300'}`}
-                                                    >
-                                                        {item}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </nav>
+            // 1. Fade Out
+            setTimeout(() => {
+                overlay.style.opacity = 1;
+                // Sound: Play creaking/rumbling sound (placeholder)
+            }, 50); 
+            
+            // 2. Load New Room (During black screen)
+            setTimeout(() => {
+                // Door Animation Placeholder Text
+                document.getElementById('transition-text').textContent = '...DOOR CREAKING...';
+                
+                // Off-Screen Load
+                setRoom(targetRoomKey, targetSpawn);
+            }, 550); // After fade-out is complete (0.5s)
+            
+            // 3. Fade In
+            setTimeout(() => {
+                document.getElementById('transition-text').classList.add('hidden');
+                overlay.style.opacity = 0;
+                STATE.interaction_mode = 'OVERWORLD';
+                
+                // Update secret door glow if needed
+                updateSecretDoorState();
+                
+                // Exit transition state
+                setTimeout(() => {
+                    overlay.classList.add('hidden');
+                }, 500);
+            }, 2000); // Allow time for loading/animation (1.5s in black)
+        }
 
-                            {/* Content Container */}
-                            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-20">
-                                
-                                {/* Hero Section */}
-                                {activeSection === 'home' && (
-                                    <div className="flex flex-col items-center justify-center min-h-[70vh] text-center">
-                                        <div className="retro-sun opacity-50 mb-10"></div>
-                                        <h1 className="text-5xl md:text-8xl font-bold mb-6 glitch neon-text-blue" data-text="FULL STACK">
-                                            FULL STACK
-                                        </h1>
-                                        <h2 className="text-3xl md:text-5xl font-bold mb-12 text-pink-500 neon-text-pink">
-                                            DEVELOPER
-                                        </h2>
-                                        <p className="max-w-2xl text-lg text-gray-300 mb-10 leading-relaxed border-l-4 border-cyan-500 pl-6 bg-black/50 p-4">
-                                            Building digital experiences at the intersection of retro aesthetics and modern technology.
-                                        </p>
-                                        <div className="flex space-x-6">
-                                            <button onClick={() => setActiveSection('projects')} className="bg-transparent border-2 border-pink-500 text-pink-500 hover:bg-pink-500 hover:text-black px-8 py-3 rounded-none uppercase tracking-widest font-bold transition-all duration-300 neon-box">
-                                                View Work
-                                            </button>
-                                            <button onClick={() => setActiveSection('contact')} className="bg-transparent border-2 border-cyan-500 text-cyan-500 hover:bg-cyan-500 hover:text-black px-8 py-3 rounded-none uppercase tracking-widest font-bold transition-all duration-300">
-                                                Contact Me
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
 
-                                {/* Projects Section */}
-                                {activeSection === 'projects' && (
-                                    <div className="animate-fade-in-up">
-                                        <h2 className="text-4xl font-bold mb-12 neon-text-pink border-b border-gray-700 pb-4 inline-block">SYSTEM_PROJECTS</h2>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                                            {projects.map((p, i) => (
-                                                <div key={i} className={`bg-black/60 border-2 ${p.color} p-6 hover:transform hover:-translate-y-2 transition-all duration-300 group`}>
-                                                    <div className="flex justify-between items-start mb-4">
-                                                        {p.icon}
-                                                        <ExternalLink className="text-gray-500 group-hover:text-white transition-colors" />
-                                                    </div>
-                                                    <h3 className="text-2xl font-bold mb-2 text-white">{p.title}</h3>
-                                                    <p className="text-gray-400 mb-6 h-12">{p.desc}</p>
-                                                    <div className="flex flex-wrap gap-2 mt-auto">
-                                                        {p.tech.map((t, idx) => (
-                                                            <span key={idx} className="text-xs font-bold px-2 py-1 bg-gray-800 text-gray-300 uppercase">
-                                                                {t}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
+        // =================================================================================
+        // --- 4. MOVEMENT & COLLISION ---
+        // =================================================================================
 
-                                {/* About Section */}
-                                {activeSection === 'about' && (
-                                    <div className="max-w-4xl mx-auto">
-                                        <div className="bg-gray-900/80 border border-cyan-500 p-8 md:p-12 relative overflow-hidden">
-                                            <div className="absolute top-0 right-0 w-20 h-20 bg-cyan-500/20 rounded-bl-full"></div>
-                                            <h2 className="text-4xl font-bold mb-8 text-cyan-400">USER_PROFILE</h2>
-                                            <div className="space-y-6 text-lg text-gray-300 leading-relaxed font-sans">
-                                                <p>
-                                                    Hello. I am a creative developer obsessed with the aesthetics of the 80s and the technology of the future. 
-                                                </p>
-                                                <p>
-                                                    With over 5 years of experience in the digital grid, I specialize in React, Node.js, and WebGL. I don't just write code; I craft immersive atmospheres.
-                                                </p>
-                                                <div className="grid grid-cols-2 gap-4 mt-8 font-mono text-sm">
-                                                    <div className="border-l-2 border-pink-500 pl-4">
-                                                        <span className="block text-pink-500 font-bold">CURRENT STATUS</span>
-                                                        Available for Hire
-                                                    </div>
-                                                    <div className="border-l-2 border-pink-500 pl-4">
-                                                        <span className="block text-pink-500 font-bold">LOCATION</span>
-                                                        Cyberspace / Remote
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
+        function checkCollision(nextX, nextZ) {
+            const playerMinX = nextX - 0.5;
+            const playerMaxX = nextX + 0.5;
+            const playerMinZ = nextZ - 0.5;
+            const playerMaxZ = nextZ + 0.5;
 
-                                {/* Contact Section */}
-                                {activeSection === 'contact' && (
-                                    <div className="flex flex-col items-center justify-center min-h-[50vh]">
-                                        <h2 className="text-4xl font-bold mb-12 neon-text-blue">ESTABLISH_UPLINK</h2>
-                                        <div className="flex space-x-8 md:space-x-16">
-                                            <a href="#" className="flex flex-col items-center group">
-                                                <div className="w-20 h-20 border-2 border-pink-500 flex items-center justify-center rounded-full group-hover:bg-pink-500 group-hover:text-black transition-all duration-300 neon-box">
-                                                    <Github size={32} />
-                                                </div>
-                                                <span className="mt-4 text-pink-500 font-bold tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">GITHUB</span>
-                                            </a>
-                                            <a href="#" className="flex flex-col items-center group">
-                                                <div className="w-20 h-20 border-2 border-cyan-500 flex items-center justify-center rounded-full group-hover:bg-cyan-500 group-hover:text-black transition-all duration-300 neon-box">
-                                                    <Twitter size={32} />
-                                                </div>
-                                                <span className="mt-4 text-cyan-500 font-bold tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">TWITTER</span>
-                                            </a>
-                                            <a href="#" className="flex flex-col items-center group">
-                                                <div className="w-20 h-20 border-2 border-purple-500 flex items-center justify-center rounded-full group-hover:bg-purple-500 group-hover:text-black transition-all duration-300 neon-box">
-                                                    <Mail size={32} />
-                                                </div>
-                                                <span className="mt-4 text-purple-500 font-bold tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">EMAIL</span>
-                                            </a>
-                                        </div>
-                                    </div>
-                                )}
+            for (const collider of collidableMeshes) {
+                const cMinX = collider.pos.x - collider.dim.x / 2;
+                const cMaxX = collider.pos.x + collider.dim.x / 2;
+                const cMinZ = collider.pos.z - collider.dim.z / 2;
+                const cMaxZ = collider.pos.z + collider.dim.z / 2;
+                
+                // AABB collision check (2D on XZ plane)
+                if (playerMaxX > cMinX && playerMinX < cMaxX &&
+                    playerMaxZ > cMinZ && playerMinZ < cMaxZ) {
+                    return true; // Collision detected
+                }
+            }
+            return false;
+        }
 
-                            </main>
+        function updatePlayerMovement() {
+            if (STATE.interaction_mode !== 'OVERWORLD') return;
 
-                            {/* Footer */}
-                            <footer className="fixed bottom-0 w-full bg-black border-t border-gray-800 text-center py-2 text-xs text-gray-600 z-50">
-                                © 2024 SYNTHEY SYSTEMS. ALL RIGHTS RESERVED.
-                            </footer>
-                        </div>
-                    )}
-                </div>
+            let moveX = 0;
+            let moveZ = 0;
+            const cameraYaw = Math.atan2(camera.position.x - playerMesh.position.x, camera.position.z - playerMesh.position.z);
+            
+            // --- 1. Point-and-Click Movement ---
+            if (STATE.active_target) {
+                const targetPos = STATE.active_target;
+                const playerPos = playerMesh.position;
+                
+                const distance = playerPos.distanceTo(targetPos);
+                if (distance < STATE.move_tolerance) {
+                    STATE.active_target = null; // Reached target
+                    // If target was a hotspot, trigger interaction
+                    if (STATE.active_hotspot && STATE.active_hotspot.trigger_on_reach) {
+                         handleInteraction(STATE.active_hotspot);
+                         STATE.active_hotspot = null;
+                    }
+                    return;
+                }
+                
+                const direction = new THREE.Vector3().subVectors(targetPos, playerPos).setY(0).normalize();
+                moveX = direction.x * STATE.speed;
+                moveZ = direction.z * STATE.speed;
+                playerMesh.rotation.y = Math.atan2(direction.x, direction.z); // Rotate player to face target
+            } 
+            // --- 2. Keyboard Movement (WASD/Arrows) ---
+            else if (controls.w || controls.s || controls.a || controls.d) {
+                const forwardFactor = controls.w ? 1 : controls.s ? -1 : 0;
+                const strafeFactor = controls.a ? 1 : controls.d ? -1 : 0;
+                
+                // Calculate movement vector relative to the camera's fixed angle
+                const forwardAngle = cameraYaw + Math.PI; // Player forward is opposite camera's view direction
+                
+                let movementVector = new THREE.Vector2(0, 0);
+
+                // Forward/Backward movement
+                movementVector.x += forwardFactor * Math.sin(forwardAngle);
+                movementVector.y += forwardFactor * Math.cos(forwardAngle);
+
+                // Strafe movement (rotated 90 degrees)
+                movementVector.x += strafeFactor * Math.sin(forwardAngle + Math.PI / 2);
+                movementVector.y += strafeFactor * Math.cos(forwardAngle + Math.PI / 2);
+                
+                movementVector.normalize().multiplyScalar(STATE.speed);
+
+                moveX = movementVector.x;
+                moveZ = movementVector.y;
+                
+                // Calculate player rotation to face movement direction
+                if (movementVector.lengthSq() > 0) {
+                     playerMesh.rotation.y = Math.atan2(movementVector.x, movementVector.y);
+                }
+            }
+            
+            // Apply movement and collision checks
+            if (moveX !== 0 || moveZ !== 0) {
+                const nextX = playerMesh.position.x + moveX;
+                const nextZ = playerMesh.position.z + moveZ;
+                
+                if (!checkCollision(nextX, nextZ)) {
+                    playerMesh.position.x = nextX;
+                    playerMesh.position.z = nextZ;
+                    STATE.player_pos.set(nextX, playerMesh.position.y, nextZ);
+                } else {
+                    // Try moving just X
+                    if (!checkCollision(nextX, playerMesh.position.z)) {
+                        playerMesh.position.x = nextX;
+                        STATE.player_pos.x = nextX;
+                    } 
+                    // Try moving just Z
+                    else if (!checkCollision(playerMesh.position.x, nextZ)) {
+                        playerMesh.position.z = nextZ;
+                        STATE.player_pos.z = nextZ;
+                    }
+                }
+            }
+        }
+
+        // =================================================================================
+        // --- 5. INTERACTION HANDLERS ---
+        // =================================================================================
+
+        function handleMouseDown(event) {
+            // Check if the interaction is possible (must be in OVERWORLD mode)
+            if (STATE.interaction_mode !== 'OVERWORLD') return;
+            
+            const rect = document.getElementById('three-container').getBoundingClientRect();
+            const pointer = new THREE.Vector2(
+                (event.clientX - rect.left) / rect.width * 2 - 1,
+                -((event.clientY - rect.top) / rect.height) * 2 + 1
             );
-        };
+            
+            raycaster.setFromCamera(pointer, camera);
+            const interactiveMeshes = currentRoomGroup.children.filter(c => c.userData.isMeshHotspot || c.userData.isHotspot);
+            
+            const intersects = raycaster.intersectObjects(interactiveMeshes, false);
+            
+            let clickedHotspot = null;
+            
+            // 1. Check for Hotspots
+            if (intersects.length > 0) {
+                // Check if the intersection is on an interactive object (hotspot mesh)
+                for (const intersect of intersects) {
+                    if (intersect.object.userData.hotspot) {
+                        clickedHotspot = intersect.object.userData.hotspot;
+                        break;
+                    }
+                }
+            }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+            if (clickedHotspot) {
+                // If a hotspot was clicked, move player near it, then trigger interaction
+                const targetPos = new THREE.Vector3().copy(hotspot.pos || hotspot.position);
+                
+                // Find a close interaction spot near the object (e.g., 2 units away from its center)
+                const interactionPoint = targetPos.clone();
+                interactionPoint.setY(STATE.player_pos.y);
+                
+                // Adjust interaction point based on camera angle (simplified)
+                const camAngle = Math.atan2(camera.position.x - targetPos.x, camera.position.z - targetPos.z);
+                interactionPoint.x += 2 * Math.sin(camAngle);
+                interactionPoint.z += 2 * Math.cos(camAngle);
+                
+                STATE.active_target = interactionPoint;
+                STATE.active_hotspot = { ...clickedHotspot, trigger_on_reach: true }; // Flag to interact when target is reached
+                
+            } else {
+                // 2. Point-and-Click movement (hit the floor)
+                const floorMesh = currentRoomGroup.children.find(c => c.name === 'floor');
+                
+                if (floorMesh) {
+                     // Raycast only against the floor mesh to find the destination point
+                    const floorIntersects = raycaster.intersectObjects([floorMesh], false); 
+
+                    if (floorIntersects.length > 0) {
+                        const target = floorIntersects[0].point.clone();
+                        target.y = STATE.player_pos.y;
+                        STATE.active_target = target;
+                        STATE.active_hotspot = null; // Clear hotspot on movement
+                    }
+                }
+            }
+        }
+        
+        function checkHotspots() {
+            if (STATE.interaction_mode !== 'OVERWORLD') {
+                document.getElementById('interaction-prompt').classList.add('hidden');
+                STATE.active_hotspot = null;
+                return;
+            }
+
+            const roomConfig = ROOM_DATA[STATE.current_room];
+            let interactionPossible = false;
+            let closestHotspot = null;
+            let closestDistanceSq = Infinity;
+
+            // Check Doors (Hotspots with radius)
+            for (const hotspot of roomConfig.hotspots) {
+                const dx = STATE.player_pos.x - hotspot.pos.x;
+                const dz = STATE.player_pos.z - hotspot.pos.z;
+                const distanceSq = dx * dx + dz * dz;
+
+                if (distanceSq < hotspot.radius * hotspot.radius) { 
+                    if (distanceSq < closestDistanceSq) {
+                        closestHotspot = hotspot;
+                        closestDistanceSq = distanceSq;
+                        interactionPossible = true;
+                    }
+                }
+            }
+            
+            // Check Mesh Hotspots (Hotspots on Geometry)
+            for (const geo of roomConfig.geometry) {
+                if (geo.hotspot) {
+                    const dx = STATE.player_pos.x - geo.pos[0];
+                    const dz = STATE.player_pos.z - geo.pos[2];
+                    const distanceSq = dx * dx + dz * dz;
+                    // Use a slightly larger radius for mesh interaction
+                    if (distanceSq < 2.5 * 2.5) { 
+                         if (distanceSq < closestDistanceSq) {
+                            closestHotspot = geo.hotspot;
+                            // Add position for movement calculation if needed
+                            closestHotspot.pos = new THREE.Vector3(...geo.pos); 
+                            closestDistanceSq = distanceSq;
+                            interactionPossible = true;
+                        }
+                    }
+                }
+            }
+
+            if (interactionPossible && closestHotspot) {
+                STATE.active_hotspot = closestHotspot;
+                document.getElementById('interaction-prompt').textContent = `[ ! ] PRESS [E] / [CLICK] TO ENGAGE: ${closestHotspot.prompt.toUpperCase()}`;
+                
+                // Handle Locked Door prompt
+                if (closestHotspot.locked && !STATE.secret_unlocked) {
+                    document.getElementById('interaction-prompt').textContent = `[ ! ] DOOR LOCKED - REQUIRES KEY ITEM`;
+                }
+
+                document.getElementById('interaction-prompt').classList.remove('hidden');
+            } else {
+                document.getElementById('interaction-prompt').classList.add('hidden');
+                STATE.active_hotspot = null;
+            }
+        }
+
+        function handleEInteraction() {
+            if (STATE.active_hotspot && STATE.interaction_mode === 'OVERWORLD') {
+                const hotspot = STATE.active_hotspot;
+
+                // 1. Door Interaction
+                if (hotspot.type === 'door') {
+                    if (hotspot.locked && !STATE.secret_unlocked) {
+                        // Locked feedback
+                        console.log("Door is locked.");
+                        return; 
+                    }
+                    startTransition(hotspot.target_room, hotspot.target_spawn);
+                    
+                // 2. Standard or Inspect Interaction
+                } else if (hotspot.type === 'text' || hotspot.type === 'inspect') {
+                    openPopup(hotspot);
+                }
+            }
+        }
+
+        // =================================================================================
+        // --- 6. INSPECTION VIEW (360° Object View) ---
+        // =================================================================================
+
+        let inspectionObject;
+        
+        function setupInspectionView() {
+            // Setup separate renderer, scene, and camera for the inspection view
+            inspectionRenderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
+            inspectionRenderer.setPixelRatio(window.devicePixelRatio / 2);
+            inspectionScene = new THREE.Scene();
+            inspectionCamera = new THREE.PerspectiveCamera(50, 1, 0.1, 10);
+            inspectionCamera.position.z = 5;
+
+            // Lighting for inspection scene
+            inspectionScene.add(new THREE.AmbientLight(0xFFFFFF, 0.5));
+            const pointLight = new THREE.PointLight(0xFFFFFF, 2);
+            pointLight.position.set(5, 5, 5);
+            inspectionScene.add(pointLight);
+
+            const container = document.getElementById('inspection-view-container');
+            container.appendChild(inspectionRenderer.domElement);
+            
+            // Orbit Controls for 360° rotation and zoom
+            inspectionControls = new THREE.OrbitControls(inspectionCamera, inspectionRenderer.domElement);
+            inspectionControls.enableDamping = true;
+            inspectionControls.minDistance = 2;
+            inspectionControls.maxDistance = 6;
+            inspectionControls.screenSpacePanning = false;
+
+            // Handle resizing of the inspection view container
+            function resizeInspection() {
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+                inspectionCamera.aspect = width / height;
+                inspectionCamera.updateProjectionMatrix();
+                inspectionRenderer.setSize(width, height);
+            }
+            resizeInspection();
+            container.resizeHandler = resizeInspection; // Store handler for removal
+            window.addEventListener('resize', resizeInspection, false);
+        }
+
+        function startInspectionView(contentId) {
+            const container = document.getElementById('inspection-view-container');
+            // Ensure the renderer is sized correctly when modal opens
+            if (container.resizeHandler) container.resizeHandler();
+
+            // Placeholder Inspection Object (A simple wireframe cube or tetrahedron)
+            if (inspectionObject) inspectionScene.remove(inspectionObject);
+
+            let geo, mat;
+            // Use different placeholder for visual flavor
+            if (contentId === 'gallery_model1') {
+                geo = new THREE.DodecahedronGeometry(1);
+                mat = new THREE.MeshBasicMaterial({ color: 0x00FF00, wireframe: true });
+            } else {
+                geo = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+                mat = new THREE.MeshLambertMaterial({ color: 0xFF0000 });
+            }
+            
+            inspectionObject = new THREE.Mesh(geo, mat);
+            inspectionScene.add(inspectionObject);
+            
+            // Reset controls view
+            inspectionCamera.position.z = 3;
+            inspectionControls.update();
+        }
+
+        function stopInspectionView() {
+            if (inspectionObject) {
+                inspectionScene.remove(inspectionObject);
+                inspectionObject = null;
+            }
+        }
+        
+        function animateInspection() {
+             // Only run if we are in the inspection mode
+             if (STATE.interaction_mode === 'POPUP_INSPECT') {
+                requestAnimationFrame(animateInspection);
+                inspectionControls.update();
+                if (inspectionRenderer && inspectionScene && inspectionCamera) {
+                    inspectionRenderer.render(inspectionScene, inspectionCamera);
+                }
+            } else {
+                // If not in inspect mode, stop requesting frames for this loop
+                // This ensures the inspection renderer stops consuming resources
+            }
+        }
+
+        // =================================================================================
+        // --- 7. PUZZLE LOGIC ---
+        // =================================================================================
+        
+        function setClueFound(index) {
+            if (!STATE.clues_found[index]) {
+                STATE.clues_found[index] = true;
+                console.log(`Clue ${index} found!`);
+                
+                if (STATE.clues_found.every(c => c === true)) {
+                    unlockSecretDoor();
+                }
+            }
+        }
+
+        function unlockSecretDoor() {
+            if (!STATE.secret_unlocked) {
+                STATE.secret_unlocked = true;
+                // Play a distinctive chime sound (placeholder)
+                console.log("PUZZLE SOLVED! THE SECRET DOOR IS UNLOCKED.");
+                
+                // Update the visual of the secret door hotspot in the Hall
+                updateSecretDoorState();
+            }
+        }
+        
+        function updateSecretDoorState() {
+            const roomHall = ROOM_DATA.ROOM_HALL;
+            const secretDoorHotspot = roomHall.hotspots.find(h => h.name === 'door_secret');
+            const secretDoorMesh = roomHall.group.children.find(c => c.userData.isHotspot && c.userData.hotspot.name === 'door_secret');
+
+            if (secretDoorHotspot && secretDoorMesh) {
+                if (STATE.secret_unlocked) {
+                    secretDoorHotspot.locked = false;
+                    secretDoorHotspot.prompt = 'UNLOCKED SECRET DOOR';
+                    secretDoorMesh.material.color.set(0x00FF00); // Change mesh color to green
+                } else {
+                    secretDoorHotspot.locked = true;
+                    secretDoorMesh.material.color.set(0xFF0000); // Change mesh color to red
+                }
+            }
+        }
+
+        // =================================================================================
+        // --- 8. MAIN GAME LOOP ---
+        // =================================================================================
+
+        function startOverworld() {
+            setScreen('overworld-ui');
+            setRoom(STATE.current_room, STATE.player_pos);
+            updateSecretDoorState(); // Initialize door state
+
+            // IMPORTANT: Start the inspection animation loop here, it stops itself
+            // when not in inspect mode.
+            animateInspection(); 
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Only update game logic and movement if we are in overworld mode
+            if (STATE.interaction_mode === 'OVERWORLD') {
+                updatePlayerMovement();
+                checkHotspots();
+            }
+
+            if (renderer && scene && camera) {
+                renderer.render(scene, camera);
+            }
+        }
+
+
+        // --- EVENT HANDLERS ---
+        document.addEventListener('keydown', (event) => {
+            // --- MAIN MENU Navigation ---
+            if (STATE.screen === 'main-menu') {
+                switch (event.key) {
+                    case 'ArrowUp':
+                    case 'w':
+                        event.preventDefault(); 
+                        STATE.menuIndex = (STATE.menuIndex - 1 + menuItems.length) % menuItems.length;
+                        updateMenuSelection();
+                        break;
+                    case 'ArrowDown':
+                    case 's':
+                        event.preventDefault(); 
+                        STATE.menuIndex = (STATE.menuIndex + 1) % menuItems.length;
+                        updateMenuSelection();
+                        break;
+                    case 'Enter':
+                    case ' ':
+                        event.preventDefault();
+                        handleMenuAction(menuItems[STATE.menuIndex].dataset.action);
+                        break;
+                }
+            } 
+            // --- OVERWORLD Controls ---
+            else if (STATE.interaction_mode === 'OVERWORLD') {
+                // Cancel point-and-click movement if keyboard input is detected
+                if (event.key.toLowerCase() === 'w' || event.key.toLowerCase() === 's' || 
+                    event.key.toLowerCase() === 'a' || event.key.toLowerCase() === 'd' ||
+                    event.key === 'ArrowUp' || event.key === 'ArrowDown' ||
+                    event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                    STATE.active_target = null;
+                }
+                
+                switch (event.key.toLowerCase()) {
+                    // Movement
+                    case 'w': controls.w = true; break;
+                    case 's': controls.s = true; break;
+                    case 'a': controls.a = true; break;
+                    case 'd': controls.d = true; break;
+                    case 'arrowup': controls.w = true; break;
+                    case 'arrowdown': controls.s = true; break;
+                    case 'arrowleft': controls.a = true; break; 
+                    case 'arrowright': controls.d = true; break; 
+                    
+                    // Interaction
+                    case 'e':
+                    case ' ':
+                        handleEInteraction();
+                        break;
+                    
+                    // Pause/Menu
+                    case 'escape':
+                        showMenu('options-menu'); // Use options as the simple pause menu
+                        break;
+                    
+                    // Direct Main Menu Access
+                    case 'm':
+                        returnToMainMenu();
+                        break;
+                }
+            } 
+            // --- POPUP / MENU Controls (Handles ESC) ---
+            else if (event.key === 'Escape') {
+                event.preventDefault();
+                if (STATE.interaction_mode === 'POPUP_TEXT' || STATE.interaction_mode === 'POPUP_INSPECT') {
+                    closePopup(); 
+                } else if (STATE.interaction_mode === 'MENU_PAUSE') {
+                    // Check and hide all overlay menus that use MENU_PAUSE
+                    if (!document.getElementById('options-menu').classList.contains('hidden')) {
+                        hideMenu('options-menu');
+                    }
+                    if (!document.getElementById('how-to-play-menu').classList.contains('hidden')) {
+                         hideMenu('how-to-play-menu'); 
+                    }
+                }
+            }
+        });
+
+        document.addEventListener('keyup', (event) => {
+            if (STATE.interaction_mode === 'OVERWORLD') {
+                switch (event.key.toLowerCase()) {
+                    case 'w': controls.w = false; break;
+                    case 's': controls.s = false; break;
+                    case 'a': controls.a = false; break;
+                    case 'd': controls.d = false; break;
+                    case 'arrowup': controls.w = false; break;
+                    case 'arrowdown': controls.s = false; break;
+                    case 'arrowleft': controls.a = false; break;
+                    case 'arrowright': controls.d = false; break;
+                }
+            }
+        });
+
+
+        // --- INITIALIZATION ---
+        window.onload = () => {
+            setupInspectionView(); // Must be called before initThree to set up separate renderer
+            initThree(); 
+            animate(); 
+            // Note: STATE.screen is 'main-menu' by default initialization.
+        };
     </script>
 </body>
 </html>
