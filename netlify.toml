@@ -5,5 +5,5 @@
   command = "echo 'Deploying Static HTML Site'"
 
 [build.environment]
-  # Explicitly set Node version to 20 to fix the "Version 22 not found" error
-  NODE_VERSION = "20"
+  # Using a specific version number (20.11.1) to satisfy strict nvm requirements
+  NODE_VERSION = "20.11.1"
