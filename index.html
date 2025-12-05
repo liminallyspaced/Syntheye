@@ -3,121 +3,442 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SYNTHEYE // Nicholas M. Siegel</title>
+    <title>Synthey Portfolio</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Core Three.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- OrbitControls -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <!-- GLTFLoader -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script> 
-    
-    <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght400;700&family=Press+Start+2P&display=swap" rel="stylesheet">
-    
+    <script src="https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.min.js"></script>
     <style>
-        :root {
-            --color-bg: #050505;
-            --color-ui-bg: #1a1a1d;
-            --color-text: #c0c0c0;
-            --color-accent: #8a0000;
-            --color-highlight: #ff3333;
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+        body {
+            background-color: #050505;
+            color: #fff;
+            font-family: 'Share Tech Mono', monospace;
+            overflow-x: hidden;
         }
-        body { background-color: var(--color-bg); color: var(--color-text); overflow: hidden; font-family: 'Inter', sans-serif; user-select: none; }
-        
-        .crt-effect::before {
-            content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none; z-index: 9999;
-            background: repeating-linear-gradient(0deg, rgba(0,0,0,0.15) 0, rgba(0,0,0,0.15) 1px, transparent 1px, transparent 2px);
+
+        /* CRT Scanline Effect */
+        .scanlines {
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.2) 50%,
+                rgba(0,0,0,0.2)
+            );
+            background-size: 100% 4px;
+            position: fixed;
+            top: 0; right: 0; bottom: 0; left: 0;
+            z-index: 50;
+            pointer-events: none;
+        }
+
+        /* Retro Sun Animation */
+        .retro-sun {
+            width: 300px;
+            height: 300px;
+            background: linear-gradient(to bottom, #ff00de, #ffaa00);
+            border-radius: 50%;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 40px #ff00de;
+            clip-path: polygon(
+                0% 0%, 100% 0%, 100% 55%, 
+                0% 55%, 0% 60%, 100% 60%, 
+                100% 65%, 0% 65%, 0% 70%, 
+                100% 70%, 100% 75%, 0% 75%,
+                0% 80%, 100% 80%, 100% 85%,
+                0% 85%, 0% 100%, 100% 100%
+            );
+        }
+
+        /* Moving Grid Floor */
+        .grid-floor {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 50vh;
+            background: 
+                linear-gradient(rgba(18, 16, 16, 0) 0%, #ff00de 100%), 
+                linear-gradient(90deg, rgba(255, 0, 222, 0.3) 1px, transparent 1px), 
+                linear-gradient(rgba(255, 0, 222, 0.3) 1px, transparent 1px);
+            background-size: 100% 100%, 40px 40px, 40px 40px;
+            transform: perspective(500px) rotateX(60deg);
+            transform-origin: bottom;
+            animation: gridMove 2s linear infinite;
+            z-index: -1;
+            opacity: 0.5;
+        }
+
+        @keyframes gridMove {
+            0% { background-position: 0 0, 0 0, 0 0; }
+            100% { background-position: 0 0, 0 40px, 0 40px; }
+        }
+
+        /* Glitch Text Utility */
+        .glitch {
+            position: relative;
+        }
+        .glitch::before, .glitch::after {
+            content: attr(data-text);
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #050505;
+        }
+        .glitch::before {
+            left: 2px;
+            text-shadow: -1px 0 #ff00de;
+            clip: rect(24px, 550px, 90px, 0);
+            animation: glitch-anim-2 3s infinite linear alternate-reverse;
+        }
+        .glitch::after {
+            left: -2px;
+            text-shadow: -1px 0 #00ffff;
+            clip: rect(85px, 550px, 140px, 0);
+            animation: glitch-anim 2.5s infinite linear alternate-reverse;
+        }
+
+        @keyframes glitch-anim {
+            0% { clip: rect(10px, 9999px, 30px, 0); }
+            20% { clip: rect(50px, 9999px, 10px, 0); }
+            40% { clip: rect(20px, 9999px, 80px, 0); }
+            60% { clip: rect(80px, 9999px, 40px, 0); }
+            80% { clip: rect(40px, 9999px, 100px, 0); }
+            100% { clip: rect(10px, 9999px, 70px, 0); }
+        }
+        @keyframes glitch-anim-2 {
+            0% { clip: rect(60px, 9999px, 10px, 0); }
+            20% { clip: rect(20px, 9999px, 40px, 0); }
+            40% { clip: rect(80px, 9999px, 20px, 0); }
+            60% { clip: rect(10px, 9999px, 80px, 0); }
+            80% { clip: rect(50px, 9999px, 90px, 0); }
+            100% { clip: rect(30px, 9999px, 60px, 0); }
+        }
+
+        .neon-box {
+            box-shadow: 0 0 10px #00ffff, inset 0 0 10px #00ffff;
         }
         
-        .retro-text { font-family: 'Press Start 2P', monospace; text-shadow: 2px 2px 0px rgba(0,0,0,0.8); }
+        .neon-text-pink {
+            text-shadow: 0 0 5px #ff00de, 0 0 10px #ff00de, 0 0 20px #ff00de;
+        }
         
-        .menu-btn { font-family: 'Press Start 2P', monospace; transition: all 0.1s; cursor: pointer; border-left: 4px solid transparent; padding-left: 10px; }
-        .menu-btn:hover, .menu-btn.selected { color: var(--color-highlight); border-left: 4px solid var(--color-accent); text-shadow: 0 0 5px var(--color-accent); }
+        .neon-text-blue {
+            text-shadow: 0 0 5px #00ffff, 0 0 10px #00ffff, 0 0 20px #00ffff;
+        }
 
-        .video-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: black; z-index: 50; display: flex; justify-content: center; align-items: center; }
-        video { width: 100%; height: 100%; object-fit: cover; }
-
-        .screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; flex-direction: column; z-index: 10; }
-        .screen.active { display: flex; }
-
-        .popup-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 800px; background: var(--color-ui-bg); border: 2px solid var(--color-accent); box-shadow: 0 0 20px rgba(0,0,0,0.9); padding: 20px; z-index: 30; display: none; }
-        
-        #inspection-canvas-container { width: 100%; height: 400px; background: #000; border: 1px solid #333; margin-bottom: 10px; }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #111;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #ff00de;
+        }
     </style>
 </head>
-<body class="crt-effect">
+<body>
+    <div id="root"></div>
 
-    <audio id="bgm-menu" loop><source src="assets/audio/menu_theme.mp3" type="audio/mp3"></audio>
-    <audio id="bgm-game" loop><source src="assets/audio/game_theme.mp3" type="audio/mp3"></audio>
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        const { Play, Pause, SkipForward, Github, Twitter, Mail, Code, ExternalLink, Terminal, Monitor, Cpu } = lucide;
 
-    <div id="video-sequence" class="video-overlay">
-        <div id="video-placeholder" class="text-center">
-            <h1 class="text-4xl text-red-600 retro-text mb-4">SYNTHEYE</h1>
-            <p class="text-gray-500 animate-pulse">[ VIDEO SEQUENCE PLAYING... ]</p>
-            <p class="text-xs text-gray-700 mt-4">Click anywhere to skip</p>
-        </div>
-        <video id="main-video" class="hidden" muted playsinline></video>
-    </div>
+        // --- Intro Sequence Component ---
+        const IntroSequence = ({ onComplete }) => {
+            const [text, setText] = useState("");
+            const [stage, setStage] = useState(0);
+            
+            // This ref helps us check if the component is still mounted before state updates
+            const isMounted = useRef(true);
 
-    <div id="screen-press-start" class="screen justify-center items-center bg-black">
-        <button id="btn-press-start" class="text-3xl text-red-600 retro-text animate-pulse hover:text-white">PRESS START</button>
-    </div>
+            useEffect(() => {
+                const sequence = async () => {
+                    if (!isMounted.current) return;
 
-    <div id="screen-main-menu" class="screen justify-center items-center bg-black/90">
-        <div class="w-full max-w-lg p-8 border-l-4 border-red-800 bg-gray-900/50">
-            <h1 class="text-5xl text-red-600 retro-text mb-2">SYNTHEYE</h1>
-            <h2 class="text-xl text-gray-500 mb-8 retro-text tracking-widest">NICHOLAS M. SIEGEL</h2>
-            <nav class="flex flex-col gap-4 text-xl">
-                <div class="menu-btn selected" data-action="start">START 3D EXPERIENCE</div>
-                <div class="menu-btn" data-action="archive">2D PORTFOLIO ARCHIVE</div>
-                <div class="menu-btn" data-action="about">ABOUT THE ARCHITECT</div>
-                <div class="menu-btn" data-action="options">CONFIGURATION</div>
-            </nav>
-        </div>
-    </div>
+                    // Stage 0: Boot sequence
+                    const bootText = "INITIALIZING SYSTEM... LOADING ASSETS... CONNECTING TO NEURAL NET...";
+                    for (let i = 0; i < bootText.length; i++) {
+                        if (!isMounted.current) return;
+                        setText(prev => prev + bootText[i]);
+                        await new Promise(r => setTimeout(r, 30));
+                    }
+                    
+                    await new Promise(r => setTimeout(r, 500));
+                    if (!isMounted.current) return;
+                    setStage(1);
 
-    <div id="screen-overworld" class="screen">
-        <div id="game-canvas-container" class="absolute inset-0 z-0"></div>
-        <div class="absolute inset-0 z-10 pointer-events-none p-6 flex flex-col justify-between">
-            <div class="flex justify-between items-start">
-                <div class="bg-black/50 p-2 border border-gray-700">
-                    <p class="text-xs text-red-500 retro-text">LOCATION:</p>
-                    <p id="ui-room-name" class="text-lg text-white retro-text">MAIN HALL</p>
+                    // Stage 1: The Reveal
+                    await new Promise(r => setTimeout(r, 2000));
+                    if (!isMounted.current) return;
+                    
+                    onComplete();
+                };
+
+                sequence();
+
+                return () => { isMounted.current = false; };
+            }, [onComplete]);
+
+            return (
+                <div className="fixed inset-0 bg-black z-40 flex flex-col items-center justify-center overflow-hidden">
+                    {/* VHS Overlay */}
+                    <div className="absolute top-10 left-10 text-xl font-bold text-white opacity-50 font-mono animate-pulse">
+                        PLAY &#9658;
+                    </div>
+                    <div className="absolute bottom-10 right-10 text-xl font-bold text-white opacity-50 font-mono">
+                        SP - 1986
+                    </div>
+                    
+                    {/* Content */}
+                    <div className="relative z-10 text-center">
+                        {stage === 0 && (
+                            <div className="text-green-400 text-xl md:text-2xl max-w-2xl px-4 h-24">
+                                > {text}<span className="animate-pulse">_</span>
+                            </div>
+                        )}
+                        
+                        {stage === 1 && (
+                            <div className="retro-sun animate-pulse"></div>
+                        )}
+
+                        {stage === 1 && (
+                            <div className="mt-96 relative z-20">
+                                <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-400 tracking-widest uppercase transform skew-x-12 glitch" data-text="SYNTHEY">
+                                    SYNTHEY
+                                </h1>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Instruction - The Critical Part */}
+                    <div className="absolute bottom-20 text-center w-full animate-bounce">
+                        <span className="bg-gray-900 border border-gray-700 px-4 py-2 rounded text-xs md:text-sm text-gray-400 uppercase tracking-widest">
+                            Press [Spacebar] to Skip Intro
+                        </span>
+                    </div>
                 </div>
-                <div class="pointer-events-auto">
-                    <button onclick="window.App.showMenu()" class="bg-gray-800 text-white px-3 py-1 border border-gray-600 hover:bg-red-900 text-xs retro-text">MENU [ESC]</button>
+            );
+        };
+
+        // --- Main App Component ---
+        const App = () => {
+            const [showIntro, setShowIntro] = useState(true);
+            const [activeSection, setActiveSection] = useState('home');
+
+            // Skip Logic: Listens for Spacebar globally
+            useEffect(() => {
+                const handleKeyDown = (e) => {
+                    // Only trigger if intro is showing
+                    if (showIntro && e.code === 'Space') {
+                        e.preventDefault(); // Prevent page scroll
+                        finishIntro();
+                    }
+                };
+
+                window.addEventListener('keydown', handleKeyDown);
+                return () => window.removeEventListener('keydown', handleKeyDown);
+            }, [showIntro]);
+
+            const finishIntro = () => {
+                setShowIntro(false);
+            };
+
+            const projects = [
+                {
+                    title: "Neon Racer",
+                    desc: "A high-speed WebGL racing game built with Three.js.",
+                    tech: ["React", "Three.js", "WebGL"],
+                    color: "border-pink-500",
+                    icon: <Monitor size={40} className="text-pink-500" />
+                },
+                {
+                    title: "CyberDeck CLI",
+                    desc: "Terminal-based portfolio template for developers.",
+                    tech: ["Node.js", "Ink", "TypeScript"],
+                    color: "border-cyan-500",
+                    icon: <Terminal size={40} className="text-cyan-500" />
+                },
+                {
+                    title: "SynthAI",
+                    desc: "Generative music AI wrapped in a retro interface.",
+                    tech: ["Python", "TensorFlow", "React"],
+                    color: "border-purple-500",
+                    icon: <Cpu size={40} className="text-purple-500" />
+                }
+            ];
+
+            return (
+                <div className="min-h-screen relative font-mono text-gray-100 selection:bg-pink-500 selection:text-white">
+                    {/* Scanlines Overlay - Always On */}
+                    <div className="scanlines"></div>
+                    
+                    {/* Moving Grid - Always On Background */}
+                    <div className="grid-floor fixed"></div>
+
+                    {/* Intro Layer */}
+                    {showIntro && <IntroSequence onComplete={finishIntro} />}
+
+                    {/* Main Content Layer */}
+                    {!showIntro && (
+                        <div className="relative z-10 transition-opacity duration-1000 opacity-100">
+                            
+                            {/* Navbar */}
+                            <nav className="fixed top-0 w-full z-50 bg-black/80 backdrop-blur-sm border-b border-pink-500/30">
+                                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                                    <div className="flex items-center justify-between h-16">
+                                        <div className="flex-shrink-0">
+                                            <span className="text-2xl font-bold tracking-wider neon-text-pink italic">SYNTHEY</span>
+                                        </div>
+                                        <div className="hidden md:block">
+                                            <div className="ml-10 flex items-baseline space-x-8">
+                                                {['home', 'projects', 'about', 'contact'].map((item) => (
+                                                    <button
+                                                        key={item}
+                                                        onClick={() => setActiveSection(item)}
+                                                        className={`uppercase tracking-widest text-sm hover:text-cyan-400 transition-colors ${activeSection === item ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-gray-300'}`}
+                                                    >
+                                                        {item}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </nav>
+
+                            {/* Content Container */}
+                            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-20">
+                                
+                                {/* Hero Section */}
+                                {activeSection === 'home' && (
+                                    <div className="flex flex-col items-center justify-center min-h-[70vh] text-center">
+                                        <div className="retro-sun opacity-50 mb-10"></div>
+                                        <h1 className="text-5xl md:text-8xl font-bold mb-6 glitch neon-text-blue" data-text="FULL STACK">
+                                            FULL STACK
+                                        </h1>
+                                        <h2 className="text-3xl md:text-5xl font-bold mb-12 text-pink-500 neon-text-pink">
+                                            DEVELOPER
+                                        </h2>
+                                        <p className="max-w-2xl text-lg text-gray-300 mb-10 leading-relaxed border-l-4 border-cyan-500 pl-6 bg-black/50 p-4">
+                                            Building digital experiences at the intersection of retro aesthetics and modern technology.
+                                        </p>
+                                        <div className="flex space-x-6">
+                                            <button onClick={() => setActiveSection('projects')} className="bg-transparent border-2 border-pink-500 text-pink-500 hover:bg-pink-500 hover:text-black px-8 py-3 rounded-none uppercase tracking-widest font-bold transition-all duration-300 neon-box">
+                                                View Work
+                                            </button>
+                                            <button onClick={() => setActiveSection('contact')} className="bg-transparent border-2 border-cyan-500 text-cyan-500 hover:bg-cyan-500 hover:text-black px-8 py-3 rounded-none uppercase tracking-widest font-bold transition-all duration-300">
+                                                Contact Me
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Projects Section */}
+                                {activeSection === 'projects' && (
+                                    <div className="animate-fade-in-up">
+                                        <h2 className="text-4xl font-bold mb-12 neon-text-pink border-b border-gray-700 pb-4 inline-block">SYSTEM_PROJECTS</h2>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                            {projects.map((p, i) => (
+                                                <div key={i} className={`bg-black/60 border-2 ${p.color} p-6 hover:transform hover:-translate-y-2 transition-all duration-300 group`}>
+                                                    <div className="flex justify-between items-start mb-4">
+                                                        {p.icon}
+                                                        <ExternalLink className="text-gray-500 group-hover:text-white transition-colors" />
+                                                    </div>
+                                                    <h3 className="text-2xl font-bold mb-2 text-white">{p.title}</h3>
+                                                    <p className="text-gray-400 mb-6 h-12">{p.desc}</p>
+                                                    <div className="flex flex-wrap gap-2 mt-auto">
+                                                        {p.tech.map((t, idx) => (
+                                                            <span key={idx} className="text-xs font-bold px-2 py-1 bg-gray-800 text-gray-300 uppercase">
+                                                                {t}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* About Section */}
+                                {activeSection === 'about' && (
+                                    <div className="max-w-4xl mx-auto">
+                                        <div className="bg-gray-900/80 border border-cyan-500 p-8 md:p-12 relative overflow-hidden">
+                                            <div className="absolute top-0 right-0 w-20 h-20 bg-cyan-500/20 rounded-bl-full"></div>
+                                            <h2 className="text-4xl font-bold mb-8 text-cyan-400">USER_PROFILE</h2>
+                                            <div className="space-y-6 text-lg text-gray-300 leading-relaxed font-sans">
+                                                <p>
+                                                    Hello. I am a creative developer obsessed with the aesthetics of the 80s and the technology of the future. 
+                                                </p>
+                                                <p>
+                                                    With over 5 years of experience in the digital grid, I specialize in React, Node.js, and WebGL. I don't just write code; I craft immersive atmospheres.
+                                                </p>
+                                                <div className="grid grid-cols-2 gap-4 mt-8 font-mono text-sm">
+                                                    <div className="border-l-2 border-pink-500 pl-4">
+                                                        <span className="block text-pink-500 font-bold">CURRENT STATUS</span>
+                                                        Available for Hire
+                                                    </div>
+                                                    <div className="border-l-2 border-pink-500 pl-4">
+                                                        <span className="block text-pink-500 font-bold">LOCATION</span>
+                                                        Cyberspace / Remote
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Contact Section */}
+                                {activeSection === 'contact' && (
+                                    <div className="flex flex-col items-center justify-center min-h-[50vh]">
+                                        <h2 className="text-4xl font-bold mb-12 neon-text-blue">ESTABLISH_UPLINK</h2>
+                                        <div className="flex space-x-8 md:space-x-16">
+                                            <a href="#" className="flex flex-col items-center group">
+                                                <div className="w-20 h-20 border-2 border-pink-500 flex items-center justify-center rounded-full group-hover:bg-pink-500 group-hover:text-black transition-all duration-300 neon-box">
+                                                    <Github size={32} />
+                                                </div>
+                                                <span className="mt-4 text-pink-500 font-bold tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">GITHUB</span>
+                                            </a>
+                                            <a href="#" className="flex flex-col items-center group">
+                                                <div className="w-20 h-20 border-2 border-cyan-500 flex items-center justify-center rounded-full group-hover:bg-cyan-500 group-hover:text-black transition-all duration-300 neon-box">
+                                                    <Twitter size={32} />
+                                                </div>
+                                                <span className="mt-4 text-cyan-500 font-bold tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">TWITTER</span>
+                                            </a>
+                                            <a href="#" className="flex flex-col items-center group">
+                                                <div className="w-20 h-20 border-2 border-purple-500 flex items-center justify-center rounded-full group-hover:bg-purple-500 group-hover:text-black transition-all duration-300 neon-box">
+                                                    <Mail size={32} />
+                                                </div>
+                                                <span className="mt-4 text-purple-500 font-bold tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">EMAIL</span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                )}
+
+                            </main>
+
+                            {/* Footer */}
+                            <footer className="fixed bottom-0 w-full bg-black border-t border-gray-800 text-center py-2 text-xs text-gray-600 z-50">
+                                © 2024 SYNTHEY SYSTEMS. ALL RIGHTS RESERVED.
+                            </footer>
+                        </div>
+                    )}
                 </div>
-            </div>
-            <div id="interaction-prompt" class="self-center hidden bg-red-900/80 text-white px-6 py-2 border-2 border-red-500 retro-text text-sm animate-pulse">[E] INTERACT</div>
-        </div>
-        <div id="loading-indicator" class="hidden absolute inset-0 bg-black z-50 flex items-center justify-center">
-            <p class="retro-text text-red-600">LOADING AREA...</p>
-        </div>
-    </div>
+            );
+        };
 
-    <div id="popup-text" class="popup-container">
-        <h2 id="popup-text-title" class="text-2xl text-red-500 retro-text mb-4">TITLE</h2>
-        <p id="popup-text-content" class="text-gray-300 leading-relaxed mb-6 whitespace-pre-wrap">Content...</p>
-        <button onclick="window.App.closePopup()" class="bg-red-900 text-white px-4 py-2 retro-text text-sm hover:bg-red-700">[CLOSE]</button>
-    </div>
-
-    <div id="popup-inspect" class="popup-container">
-        <h2 id="popup-inspect-title" class="text-2xl text-red-500 retro-text mb-2">OBJECT</h2>
-        <div id="inspection-canvas-container"></div>
-        <p id="popup-inspect-desc" class="text-gray-400 text-sm mb-4">Description...</p>
-        <button onclick="window.App.closePopup()" class="bg-red-900 text-white px-4 py-2 retro-text text-sm hover:bg-red-700">[CLOSE]</button>
-    </div>
-
-    <div id="screen-generic" class="screen justify-center items-center bg-black/95 z-40">
-        <div class="max-w-2xl w-full p-8 border border-red-900 bg-gray-900">
-            <h2 id="generic-title" class="text-3xl text-red-600 retro-text mb-6">TITLE</h2>
-            <div id="generic-content" class="text-gray-300 mb-8 space-y-4">Content</div>
-            <button onclick="window.App.setScreen('screen-main-menu')" class="bg-gray-700 text-white px-4 py-2 retro-text hover:bg-gray-600">[BACK]</button>
-        </div>
-    </div>
-
-    <script type="module" src="App.js"></script>
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
 </body>
 </html>
