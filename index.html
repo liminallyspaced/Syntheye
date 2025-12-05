@@ -8,6 +8,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- THREE.js CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- THREE.js GLTFLoader (REQUIRED FOR CHARACTERS) -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <!-- THREE.js Orbit Controls -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <!-- Google Fonts for PS1 Vibe -->
@@ -453,6 +455,11 @@
         const body = document.body;
         let renderer, scene, camera, playerMesh, targetMarkerMesh;
         let inspectionCamera, inspectionControls, inspectionScene, inspectionRenderer;
+        
+        // NEW: Animation Globals
+        let mixer; // The animation player
+        const clock = new THREE.Clock(); // Tracks time for smooth animation
+
         let controls = { w: false, a: false, s: false, d: false }; 
         let currentRoomGroup = new THREE.Group();
         let collidableMeshes = [];
@@ -596,12 +603,53 @@
             scene.fog = new THREE.Fog(0x111111, 10, 40); 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
             
-            // Player Character
+            // --- PLAYER CHARACTER (PLACEHOLDER & GLB LOADER) ---
+            
+            // 1. Create Placeholder (Red Box) so game works immediately
             const playerGeometry = new THREE.BoxGeometry(1, 2, 1);
             const playerMaterial = new THREE.MeshLambertMaterial({ color: 0xFF0000 }); 
             playerMesh = new THREE.Mesh(playerGeometry, playerMaterial);
             playerMesh.position.y = 1; 
             scene.add(playerMesh);
+
+            // 2. Load Custom GLB Character
+            const loader = new THREE.GLTFLoader();
+            
+            loader.load('./character.glb', function (gltf) {
+                const model = gltf.scene;
+                
+                // Adjust scale if your model is too big/small
+                model.scale.set(1, 1, 1); 
+                
+                // Sync position with current placeholder
+                model.position.copy(playerMesh.position);
+                model.rotation.copy(playerMesh.rotation);
+
+                // --- NEW: ANIMATION SETUP ---
+                if (gltf.animations && gltf.animations.length > 0) {
+                    mixer = new THREE.AnimationMixer(model);
+                    
+                    // console.log(gltf.animations); // Uncomment to see animation names in console
+
+                    // Try to find an animation named 'Idle' or 'Walk', otherwise play the first one
+                    const clip = THREE.AnimationClip.findByName(gltf.animations, 'Idle') || gltf.animations[0];
+                    
+                    if (clip) {
+                        const action = mixer.clipAction(clip);
+                        action.play();
+                    }
+                }
+                // ---------------------------
+
+                // Remove placeholder and add new model
+                scene.remove(playerMesh);
+                scene.add(model);
+                playerMesh = model; 
+
+                console.log("Character loaded successfully!");
+            }, undefined, function (error) {
+                console.log("No custom character found (404), keeping placeholder box.");
+            });
 
             // Target Marker (Destination Ring)
             const ringGeo = new THREE.TorusGeometry(0.5, 0.05, 8, 16);
@@ -1077,6 +1125,13 @@
 
         function animate() {
             requestAnimationFrame(animate);
+
+            // --- NEW: Update Animation Mixer ---
+            const delta = clock.getDelta();
+            if (mixer) {
+                mixer.update(delta);
+            }
+            // -----------------------------------
 
             if (STATE.interaction_mode === 'OVERWORLD') {
                 updatePlayerMovement();
