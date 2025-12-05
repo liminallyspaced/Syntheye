@@ -2,7 +2,6 @@ import { STATE } from './constants.js';
 import { setScreen, showMenu, hideMenu } from './utils.js';
 import { initAudio, playMusic } from './audio.js';
 import { setupInspectionView, startInspectionView, stopInspectionView } from './inspector.js';
-// Correct import matching the file above
 import { initThree, setRoom, animate } from './three-scene.js';
 
 const App = {
@@ -33,7 +32,6 @@ const App = {
         const mainVideo = document.getElementById('main-video');
         const placeholder = document.getElementById('video-placeholder');
         
-        // Sequence of videos to play
         const videos = [
             'assets/video/syntheye_logo.mp4',
             'assets/video/syntheye_loading.mp4',
@@ -43,28 +41,24 @@ const App = {
         let currentVidIdx = 0;
 
         const playNext = () => {
-            // Check if sequence was skipped externally before continuing
             if (videoSeq.style.display === 'none') return;
 
             if (currentVidIdx >= videos.length) {
-                // Sequence done
                 App.skipSequence();
                 return;
             }
 
             mainVideo.src = videos[currentVidIdx];
             mainVideo.classList.remove('hidden');
-            placeholder.classList.add('hidden'); // Hide text once video starts
+            placeholder.classList.add('hidden');
             
             mainVideo.play().then(() => {
-                // Play successful
+                // Video playing
             }).catch(e => {
-                console.warn("Autoplay blocked or file missing. Showing placeholder.");
+                console.warn("Autoplay blocked. Showing placeholder.");
                 mainVideo.classList.add('hidden');
                 placeholder.classList.remove('hidden');
-                // Auto-advance placeholder after delay if video fails
                 setTimeout(() => {
-                    // Only advance if still visible
                     if (videoSeq.style.display !== 'none') {
                         currentVidIdx++;
                         playNext();
@@ -73,13 +67,11 @@ const App = {
             });
         };
 
-        // When one video ends, play next
         mainVideo.onended = () => {
             currentVidIdx++;
             playNext();
         };
 
-        // Start first video
         playNext();
     },
 
@@ -88,15 +80,12 @@ const App = {
         const pressStart = document.getElementById('screen-press-start');
         const mainVideo = document.getElementById('main-video');
 
-        // Only act if the video sequence is currently visible
-        if (videoSeq && videoSeq.style.display !== 'none') {
+        if (videoSeq.style.display !== 'none') {
             console.log("Skipping Intro...");
-            
             if(mainVideo) {
                 mainVideo.pause();
-                mainVideo.onended = null; // Stop chain
+                mainVideo.onended = null;
             }
-            
             videoSeq.style.display = 'none';
             if(pressStart) pressStart.style.display = 'flex';
         }
@@ -108,30 +97,27 @@ const App = {
         initThree(App.handleInteraction);
         animate(); 
 
-        // Start Intro
         App.startVideoSequence();
 
-        // UI Event Listeners
         const videoSeq = document.getElementById('video-sequence');
         const pressStart = document.getElementById('screen-press-start');
+        const btnPressStart = document.getElementById('btn-press-start');
 
-        // 1. Global Document Click Listener (The Fix)
-        // Catches clicks anywhere to ensure skip works
+        // Global Click Listener for skipping
         document.addEventListener('click', (e) => {
-            // If video sequence is visible, skip it
             if (videoSeq && videoSeq.style.display !== 'none') {
-                e.preventDefault(); // Prevent accidental interactions underneath
+                e.preventDefault(); 
                 App.skipSequence();
             }
         });
 
-        // Press Start
-        document.getElementById('btn-press-start').addEventListener('click', () => {
-            pressStart.style.display = 'none';
-            setScreen('screen-main-menu');
-        });
+        if (btnPressStart) {
+            btnPressStart.addEventListener('click', () => {
+                if(pressStart) pressStart.style.display = 'none';
+                setScreen('screen-main-menu');
+            });
+        }
 
-        // Menu Buttons
         document.querySelectorAll('.menu-btn').forEach(btn => {
             btn.addEventListener('mouseenter', () => {
                 document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('selected'));
@@ -140,9 +126,11 @@ const App = {
             btn.addEventListener('click', () => {
                 const action = btn.dataset.action;
                 if (action === 'start') {
-                    document.getElementById('loading-indicator').classList.remove('hidden');
+                    const loading = document.getElementById('loading-indicator');
+                    if(loading) loading.classList.remove('hidden');
+                    
                     setTimeout(() => {
-                        document.getElementById('loading-indicator').classList.add('hidden');
+                        if(loading) loading.classList.add('hidden');
                         setScreen('screen-overworld');
                         setRoom('ROOM_HALL', [0, 1, 0]);
                     }, 1000);
@@ -157,6 +145,8 @@ const App = {
                 }
             });
         });
+        
+        console.log("App initialized successfully.");
     }
 };
 

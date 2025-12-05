@@ -1,5 +1,3 @@
-import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js';
-import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/controls/OrbitControls.js';
 import { STATE } from './constants.js';
 
 let iScene, iCam, iRenderer, iControls, iMesh;
@@ -9,6 +7,7 @@ export function setupInspectionView() {
     const container = document.getElementById('inspection-canvas-container');
     if(!container) return;
 
+    // Use Global THREE
     iScene = new THREE.Scene();
     iScene.background = new THREE.Color(0x111111);
     
@@ -24,14 +23,14 @@ export function setupInspectionView() {
     iScene.add(light);
     iScene.add(new THREE.AmbientLight(0x404040));
 
-    iControls = new OrbitControls(iCam, iRenderer.domElement);
+    // Use Global OrbitControls (loaded via script tag in HTML)
+    iControls = new THREE.OrbitControls(iCam, iRenderer.domElement);
     iControls.enableDamping = true;
 }
 
 export function startInspectionView(id) {
     if (iMesh) iScene.remove(iMesh);
 
-    // Placeholder
     let geo, col;
     if (id === 'gallery_model1') { geo = new THREE.DodecahedronGeometry(1); col = 0x00FF00; }
     else { geo = new THREE.BoxGeometry(1.5, 1.5, 1.5); col = 0xFF0000; }

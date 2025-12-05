@@ -1,18 +1,20 @@
-import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js';
 import { STATE, ROOM_DATA } from './constants.js';
 
 let scene, camera, renderer, playerMesh;
-let currentRoomGroup = new THREE.Group();
-let raycaster = new THREE.Raycaster();
-let mouse = new THREE.Vector2();
-
-// Callback function to communicate back to App.js
+let currentRoomGroup;
+let raycaster;
+let mouse;
 let interactionCallback = null;
 
 export function initThree(onInteract) {
     interactionCallback = onInteract;
     const container = document.getElementById('game-canvas-container');
     
+    // Initialize Globals
+    raycaster = new THREE.Raycaster();
+    mouse = new THREE.Vector2();
+    currentRoomGroup = new THREE.Group();
+
     renderer = new THREE.WebGLRenderer({ antialias: false });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio / 2); // PS1 Style
@@ -37,49 +39,53 @@ export function initThree(onInteract) {
     dLight.position.set(20, 30, 10);
     scene.add(dLight);
 
+    scene.add(currentRoomGroup);
+
     // Events
     window.addEventListener('resize', onResize);
     container.addEventListener('mousedown', handleMouseDown);
 
-    loadAllRooms(); // Pre-load geometry
+    loadAllRooms(); 
 }
 
 function loadAllRooms() {
-    for (const key in ROOM_DATA) {
-        const config = ROOM_DATA[key];
-        config.group = new THREE.Group();
-        
-        config.geometry.forEach(g => {
-            const geo = new THREE.BoxGeometry(g.dim[0], g.dim[1], g.dim[2]);
-            const mat = new THREE.MeshLambertMaterial({ color: g.color });
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.set(g.pos[0], g.pos[1], g.pos[2]);
-            mesh.name = g.name;
-            if(g.hotspot) {
-                mesh.userData.hotspot = g.hotspot;
-                mesh.userData.isMeshHotspot = true;
-            }
-            config.group.add(mesh);
-        });
-
-        config.hotspots.forEach(h => {
-            const geo = new THREE.CylinderGeometry(0.5, 0.5, 2, 8);
-            const mat = new THREE.MeshBasicMaterial({ color: h.locked ? 0xFF0000 : 0x00FF00, transparent: true, opacity: 0.3 });
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.set(h.pos.x, 1, h.pos.z);
-            mesh.userData.hotspot = h;
-            mesh.userData.isHotspot = true;
-            config.group.add(mesh);
-        });
-    }
+    // Note: We build room data on demand in setRoom to keep scene light, 
+    // or pre-build here if optimization is needed.
+    // For this version, we will build geometry inside setRoom for simplicity.
 }
 
 export function setRoom(roomKey, spawnPoint) {
-    if(currentRoomGroup) scene.remove(currentRoomGroup);
+    // Clear old room
+    while(currentRoomGroup.children.length > 0){ 
+        currentRoomGroup.remove(currentRoomGroup.children[0]); 
+    }
     
     const config = ROOM_DATA[roomKey];
-    currentRoomGroup = config.group;
-    scene.add(currentRoomGroup);
+    
+    // Build Geometry
+    config.geometry.forEach(g => {
+        const geo = new THREE.BoxGeometry(g.dim[0], g.dim[1], g.dim[2]);
+        const mat = new THREE.MeshLambertMaterial({ color: g.color });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(g.pos[0], g.pos[1], g.pos[2]);
+        mesh.name = g.name;
+        if(g.hotspot) {
+            mesh.userData.hotspot = g.hotspot;
+            mesh.userData.isMeshHotspot = true;
+        }
+        currentRoomGroup.add(mesh);
+    });
+
+    // Build Hotspots
+    config.hotspots.forEach(h => {
+        const geo = new THREE.CylinderGeometry(0.5, 0.5, 2, 8);
+        const mat = new THREE.MeshBasicMaterial({ color: h.locked ? 0xFF0000 : 0x00FF00, transparent: true, opacity: 0.3 });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(h.pos[0], 1, h.pos[2]);
+        mesh.userData.hotspot = h;
+        mesh.userData.isHotspot = true;
+        currentRoomGroup.add(mesh);
+    });
 
     camera.position.set(...config.camera.pos);
     camera.lookAt(...config.camera.target);
@@ -97,7 +103,6 @@ export function animate() {
     requestAnimationFrame(animate);
     if(STATE.interaction_mode === 'OVERWORLD') {
         updateMovement();
-        checkHotspots();
     }
     renderer.render(scene, camera);
 }
@@ -121,10 +126,6 @@ function updateMovement() {
     }
 }
 
-function checkHotspots() {
-    // Logic to show UI prompt if close to interactive item
-}
-
 function handleMouseDown(e) {
     if(STATE.interaction_mode !== 'OVERWORLD') return;
     
@@ -141,7 +142,7 @@ function handleMouseDown(e) {
         if(obj.userData.hotspot) {
             const h = obj.userData.hotspot;
             if(h.type === 'door') {
-                setRoom(h.target, h.spawn);
+                setRoom(h.target_room, h.spawn);
             } else {
                 STATE.target = intersects[0].point;
                 STATE.activeHotspot = h;
