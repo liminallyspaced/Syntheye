@@ -601,6 +601,9 @@
             renderer = new THREE.WebGLRenderer({ antialias: false });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio / 2); 
+            // --- SHADOWS ENABLED (BEST PRACTICE) ---
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
             document.getElementById('three-container').appendChild(renderer.domElement);
 
             scene = new THREE.Scene();
@@ -615,6 +618,7 @@
             const playerMaterial = new THREE.MeshLambertMaterial({ color: 0xFF0000 }); 
             playerMesh = new THREE.Mesh(playerGeometry, playerMaterial);
             playerMesh.position.y = 1; 
+            playerMesh.castShadow = true; // Placeholder casts shadow
             scene.add(playerMesh);
 
             // 2. Load Custom GLB Character
@@ -632,12 +636,18 @@
                 model.position.copy(playerMesh.position);
                 model.rotation.copy(playerMesh.rotation);
 
+                // --- BEST PRACTICE: MESH TRAVERSAL FOR SHADOWS ---
+                model.traverse(function (node) {
+                    if (node.isMesh) {
+                        node.castShadow = true;
+                        node.receiveShadow = true;
+                    }
+                });
+
                 // --- NEW: ANIMATION SETUP ---
                 if (gltf.animations && gltf.animations.length > 0) {
                     mixer = new THREE.AnimationMixer(model);
                     
-                    // console.log(gltf.animations); // Uncomment to see animation names in console
-
                     // Try to find an animation named 'Idle' or 'Walk', otherwise play the first one
                     const clip = THREE.AnimationClip.findByName(gltf.animations, 'Idle') || gltf.animations[0];
                     
@@ -667,9 +677,29 @@
             targetMarkerMesh.visible = false;
             scene.add(targetMarkerMesh);
             
-            scene.add(new THREE.AmbientLight(0x404040, 3));
-            const directionalLight = new THREE.DirectionalLight(0xFFFFFF, 2);
+            // --- LIGHTING IMPROVEMENTS ---
+            scene.add(new THREE.AmbientLight(0x404040, 2)); // Softer ambient
+            
+            // Hemisphere light gives a nice sky/ground gradient (BEST PRACTICE for outdoor/rooms)
+            const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x444444, 0.6 );
+            hemiLight.position.set( 0, 20, 0 );
+            scene.add( hemiLight );
+
+            const directionalLight = new THREE.DirectionalLight(0xFFFFFF, 1.5);
             directionalLight.position.set(20, 30, 10);
+            
+            // --- SHADOW CONFIGURATION ---
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 1024;
+            directionalLight.shadow.mapSize.height = 1024;
+            directionalLight.shadow.camera.near = 0.5;
+            directionalLight.shadow.camera.far = 50;
+            // Widen shadow camera to cover room
+            directionalLight.shadow.camera.left = -20;
+            directionalLight.shadow.camera.right = 20;
+            directionalLight.shadow.camera.top = 20;
+            directionalLight.shadow.camera.bottom = -20;
+            
             scene.add(directionalLight);
 
             window.addEventListener('resize', onWindowResize, false);
@@ -686,10 +716,19 @@
 
                 roomConfig.geometry.forEach(g => {
                     const geo = new THREE.BoxGeometry(g.dim[0], g.dim[1], g.dim[2]);
-                    const mat = new THREE.MeshLambertMaterial({ color: g.color });
+                    // Standard material reacts to light better
+                    const mat = new THREE.MeshStandardMaterial({ color: g.color });
                     const mesh = new THREE.Mesh(geo, mat);
                     mesh.name = g.name; 
                     mesh.position.set(g.pos[0], g.pos[1], g.pos[2]);
+                    
+                    // Enable shadow receiving for floor/walls
+                    mesh.receiveShadow = true;
+                    // Walls cast shadows too
+                    if (g.name !== 'floor') {
+                        mesh.castShadow = true;
+                    }
+
                     roomConfig.group.add(mesh);
                     
                     if (g.collider) {
