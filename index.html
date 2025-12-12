@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SYNTHEYE: Portfolio Adventure v1.1</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- MediaPipe Hands & Camera Utils -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <!-- Import Map for THREE.js ES Modules -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+            "three/examples/jsm/loaders/GLTFLoader.js": "https://unpkg.com/three@0.128.0/examples/jsm/loaders/GLTFLoader.js",
+            "three/examples/jsm/loaders/FBXLoader.js": "https://unpkg.com/three@0.128.0/examples/jsm/loaders/FBXLoader.js",
+            "three/examples/jsm/controls/OrbitControls.js": "https://unpkg.com/three@0.128.0/examples/jsm/controls/OrbitControls.js"
+        }
+    }
+    </script>
+
+    <!-- Google Fonts for PS1 Vibe -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+
+    <style>
+        /* Retro/PSX Styling */
+        body {
+            background-color: #000;
+            color: #F0F0F0;
+            overflow: hidden;
+            font-family: 'Press Start 2P', monospace;
+            cursor: default;
+            user-select: none;
+        }
+
+        /* Screen Wrapper */
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+
+        /* Properly hide screens - ensure they don't show behind 3D content */
+        .screen.hidden {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+
+        /* Menu Card Styling */
+        .menu-card {
+            background-color: #102048;
+            /* PS1 Blue/Dark */
+            border: 4px solid #F0F0F0;
+            box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.8);
+            width: 90%;
+            max-width: 450px;
+        }
+
+        .title-bar {
+            background-color: #38508f;
+            padding: 0.5rem 1rem;
+            border-bottom: 2px solid #F0F0F0;
+        }
+
+        .menu-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            transition: background-color 0.1s;
+        }
+
+        .menu-item:hover,
+        .menu-item.selected {
+            background-color: #38508f;
+            text-shadow: 1px 1px 0 #000;
+        }
+
+        /* UI Overlay / Prompts */
+        #ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        /* Interaction Prompt */
+        #interaction-prompt {
+            position: absolute;
+            bottom: 5%;
+            padding: 8px 16px;
+            background-color: #000000;
+            color: #ffffff;
+            border: 2px solid #ff0000;
+            box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.7);
+            animation: pulse 1s infinite alternate;
+            left: 50%;
+            transform: translateX(-50%);
+            pointer-events: none;
+        }
+
+        @keyframes pulse {
+            from {
+                opacity: 0.9;
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1.02) translateX(-50%);
+            }
+        }
+
+        /* Transition Overlay (Fade) */
+        #transition-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: black;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        /* Popup Styling */
+        .popup-card {
+            background-color: #1A4D2E;
+            /* PS1 Green/Dark */
+            border: 4px solid #F0F0F0;
+            box-shadow: 10px 10px 0px rgba(0, 0, 0, 0.8);
+            width: 95%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            font-family: Inter, sans-serif;
+        }
+
+        .close-button {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            background-color: #ff0000;
+            color: white;
+            border: none;
+            font-family: 'Press Start 2P', monospace;
+            cursor: pointer;
+            box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.5);
+            z-index: 30;
+        }
+
+        /* Inspection View Specifics */
+        #inspection-view-container {
+            width: 100%;
+            height: 100%;
+            background-color: #111111;
+        }
+
+        /* CRT Filter */
+        .crt-active:after {
+            content: " ";
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+                linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 9999;
+            pointer-events: none;
+            background-size: 100% 4px, 3px 100%;
+            opacity: 0.9;
+        }
+
+        /* Padlock Overlay */
+        #padlock-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 150;
+        }
+
+        /* Hidden by default - only show when JS removes hidden class */
+        #padlock-overlay.hidden {
+            display: none !important;
+        }
+
+        #padlock-container {
+            background: linear-gradient(180deg, #1a0808 0%, #0d0404 100%);
+            border: 4px solid #880000;
+            box-shadow: 0 0 40px rgba(136, 0, 0, 0.5), inset 0 0 20px rgba(0, 0, 0, 0.8);
+            padding: 30px 40px;
+            text-align: center;
+        }
+
+        .padlock-header {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 14px;
+            color: #ff4444;
+            margin-bottom: 25px;
+            text-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
+        }
+
+        .padlock-wheels {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 25px;
+        }
+
+        .padlock-wheel {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .padlock-arrow {
+            width: 50px;
+            height: 30px;
+            background: #331111;
+            border: 2px solid #660000;
+            color: #ff6666;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.1s;
+            font-family: monospace;
+        }
+
+        .padlock-arrow:hover {
+            background: #441111;
+            border-color: #880000;
+            color: #ff8888;
+        }
+
+        .padlock-arrow:active {
+            background: #550000;
+            transform: scale(0.95);
+        }
+
+        .padlock-digit {
+            width: 50px;
+            height: 60px;
+            background: #000;
+            border: 3px solid #444;
+            color: #ff0000;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 28px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-shadow: 0 0 10px rgba(255, 0, 0, 0.8);
+            box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.9);
+        }
+
+        .padlock-close {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 10px;
+            padding: 10px 25px;
+            background: #330000;
+            border: 2px solid #550000;
+            color: #aa6666;
+            cursor: pointer;
+            transition: all 0.1s;
+        }
+
+        .padlock-close:hover {
+            background: #440000;
+            color: #cc8888;
+        }
+
+        #padlock-container.padlock-solved {
+            border-color: #00ff00;
+            box-shadow: 0 0 60px rgba(0, 255, 0, 0.6);
+        }
+
+        #padlock-container.padlock-solved .padlock-digit {
+            color: #00ff00;
+            border-color: #00aa00;
+            text-shadow: 0 0 15px rgba(0, 255, 0, 0.8);
+        }
+
+        #padlock-container.padlock-solved .padlock-header {
+            color: #00ff00;
+        }
+    </style>
+</head>
+
+<body class="font-mono bg-black crt-active">
+
+    <!-- DEBUG BUTTON - Click to copy camera debug logs -->
+    <button id="debug-copy-btn" onclick="copyDebugLogs()" style="
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        z-index: 99999;
+        padding: 10px 15px;
+        background: #ff0;
+        color: #000;
+        font-family: monospace;
+        font-weight: bold;
+        border: 2px solid #000;
+        cursor: pointer;
+    ">📋 COPY DEBUG</button>
+    <script>
+        function copyDebugLogs() {
+            const logs = window.cameraDebugLogs || [];
+            if (logs.length === 0) {
+                alert('No camera debug logs yet. Make a pinch gesture first!');
+                return;
+            }
+            navigator.clipboard.writeText(logs.join('\n')).then(() => {
+                alert('Debug logs copied! Paste them back to share with me.');
+                window.cameraDebugLogs = [];
+            }).catch(err => alert('Copy failed: ' + err));
+        }
+    </script>
+
+    <!-- Transition Overlay (Used for Fades and Door Animations) -->
+    <div id="transition-overlay" class="hidden flex-col justify-center items-center">
+        <p id="transition-text" class="text-xl text-white hidden">LOADING...</p>
+    </div>
+
+    <!-- 1. Main Menu Screen -->
+    <div id="main-menu" class="screen flex-col hidden">
+        <h1 class="text-4xl sm:text-5xl mb-12 text-center text-white p-4">SYNTHEYE</h1>
+        <div class="menu-card p-2">
+            <h2 class="title-bar text-xl text-white mb-2">ACCESS MENU V1.2</h2>
+            <div id="menu-options" class="divide-y divide-ps1-gray">
+                <div class="menu-item selected" data-action="start" data-index="0">
+                    <span class="selection-arrow mr-4" style="visibility: visible;">►</span>
+                    <span>PLAY</span>
+                </div>
+                <div class="menu-item" data-action="portfolio" data-index="1">
+                    <span class="selection-arrow mr-4" style="visibility: hidden;">►</span>
+                    <span>PORTFOLIO VIEWER</span>
+                </div>
+                <div class="menu-item" data-action="how-to-play" data-index="2">
+                    <span class="selection-arrow mr-4" style="visibility: hidden;">►</span>
+                    <span>HOW TO PLAY</span>
+                </div>
+                <div class="menu-item" data-action="credits" data-index="3">
+                    <span class="selection-arrow mr-4" style="visibility: hidden;">►</span>
+                    <span>CREDITS</span>
+                </div>
+                <div class="menu-item" data-action="options" data-index="4">
+                    <span class="selection-arrow mr-4" style="visibility: hidden;">►</span>
+                    <span>OPTIONS</span>
+                </div>
+                <div class="menu-item" data-action="bug-report" data-index="5">
+                    <span class="selection-arrow mr-4" style="visibility: hidden;">►</span>
+                    <span>BUG REPORT</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 1b. Difficulty Mode Selection Screen -->
+    <div id="difficulty-select" class="screen hidden flex-col">
+        <h1 class="text-3xl sm:text-4xl mb-8 text-center text-white p-4">SELECT MODE</h1>
+        <div class="menu-card p-4">
+            <h2 class="title-bar text-lg text-white mb-4">DIFFICULTY</h2>
+            <div id="difficulty-options" class="space-y-2">
+                <div class="menu-item difficulty-btn" data-difficulty="freeroam" data-index="0">
+                    <span class="selection-arrow mr-4" style="visibility: visible;">►</span>
+                    <div class="flex flex-col">
+                        <span class="text-green-400">FREE ROAM</span>
+                        <span class="text-xs text-gray-400">Portfolio mode. All doors unlocked. No puzzles.</span>
+                    </div>
+                </div>
+                <div class="menu-item difficulty-btn" data-difficulty="normal" data-index="1">
+                    <span class="selection-arrow mr-4" style="visibility: hidden;">►</span>
+                    <div class="flex flex-col">
+                        <span class="text-yellow-400">NORMAL</span>
+                        <span class="text-xs text-gray-400">Guided experience. Puzzles in each room.</span>
+                    </div>
+                </div>
+                <div class="menu-item difficulty-btn" data-difficulty="hard" data-index="2">
+                    <span class="selection-arrow mr-4" style="visibility: hidden;">►</span>
+                    <div class="flex flex-col">
+                        <span class="text-red-400">HARD</span>
+                        <span class="text-xs text-gray-400">Survival-horror. Items scattered. Backtracking
+                            required.</span>
+                    </div>
+                </div>
+                <div class="menu-item difficulty-btn" data-difficulty="testing" data-index="3">
+                    <span class="selection-arrow mr-4" style="visibility: hidden;">►</span>
+                    <div class="flex flex-col">
+                        <span class="text-cyan-400">TESTING</span>
+                        <span class="text-xs text-gray-400">Gun Range. Hand-tracking levitation test.</span>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-4 text-center">
+                <button id="btn-back-difficulty" class="text-xs text-gray-500 hover:text-white">[ BACK ]</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Overworld UI Screen (Container for 3D) -->
+    <div id="overworld-ui" class="screen hidden flex-col">
+        <div id="three-container" class="w-full h-full absolute">
+            <!-- THREE.js Canvas will be injected here -->
+        </div>
+
+        <!-- UI Overlay for Prompts and Buttons -->
+        <div id="ui-overlay">
+            <!-- Interaction Prompt -->
+            <div id="interaction-prompt" class="absolute bottom-5% p-2 bg-black border border-red-500 hidden text-xs">
+                PRESS [E] / [CLICK] TO INTERACT
+            </div>
+
+            <!-- Crosshair (for Testing/Gun Range mode) -->
+            <div id="crosshair" class="hidden"
+                style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 50;">
+                <div style="width: 20px; height: 2px; background: cyan; position: absolute; left: -10px; top: -1px;">
+                </div>
+                <div style="width: 2px; height: 20px; background: cyan; position: absolute; left: -1px; top: -10px;">
+                </div>
+            </div>
+
+            <!-- Room Title Display -->
+            <div id="room-title"
+                class="absolute top-4 left-4 text-sm bg-black bg-opacity-70 p-2 rounded-sm border border-gray-500">
+                ROOM: UNKNOWN
+            </div>
+
+            <!-- Game Menu Buttons -->
+            <div id="game-menu-buttons" class="absolute bottom-4 right-4 flex space-x-4 pointer-events-auto">
+                <button id="btn-options"
+                    class="px-4 py-2 bg-gray-700 hover:bg-gray-500 text-white text-xs font-mono rounded-md shadow-lg">[
+                    ESC ] OPTIONS</button>
+                <button id="btn-main-menu"
+                    class="px-4 py-2 bg-red-800 hover:bg-red-600 text-white text-xs font-mono rounded-md shadow-lg">[ M
+                    ] MAIN MENU</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Standard Text/Info Popup Screen -->
+    <div id="text-popup" class="screen hidden bg-black bg-opacity-70">
+        <div class="popup-card p-4">
+            <button class="close-button" id="btn-close-text-popup">[ ESC ] BACK</button>
+            <h2 id="popup-title" class="title-bar text-2xl mb-4 text-white font-mono">TEXT TITLE</h2>
+            <div class="p-2 text-sm text-ps1-light" style="font-family: Inter, sans-serif;">
+                <p id="popup-text" class="whitespace-pre-wrap"></p>
+                <p id="popup-clue-status" class="mt-4 text-yellow-300 font-mono text-xs"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Inspection (360° View) Popup Screen -->
+    <div id="inspection-popup" class="screen hidden bg-black bg-opacity-70">
+        <div class="popup-card p-4 flex flex-col items-center">
+            <button class="close-button" id="btn-close-inspect-popup">[ ESC ] EXIT INSPECT</button>
+            <h2 id="inspect-title" class="title-bar text-xl mb-2 w-full text-white font-mono">OBJECT INSPECTION</h2>
+
+            <div class="flex flex-col lg:flex-row w-full h-full min-h-[500px]">
+                <!-- 3D Inspection Area -->
+                <div id="inspection-view-container"
+                    class="lg:w-3/4 w-full h-96 lg:h-auto bg-gray-900 border border-gray-700"></div>
+
+                <!-- Description Panel -->
+                <div class="lg:w-1/4 w-full p-4 bg-gray-800 text-sm font-sans">
+                    <p id="inspect-description" class="text-ps1-light whitespace-pre-wrap"></p>
+                    <p id="inspect-clue-status" class="mt-4 text-red-400 font-mono text-xs"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. Pause Menu Overlay (ESC) -->
+    <div id="options-menu" class="screen hidden bg-black bg-opacity-80">
+        <div class="menu-card p-6" style="min-width: 400px;">
+            <h2 class="title-bar text-2xl text-white mb-6 text-center">PAUSED</h2>
+
+            <!-- Quick Actions -->
+            <div class="space-y-3 mb-6">
+                <button id="btn-resume"
+                    class="w-full p-3 bg-green-700 hover:bg-green-600 text-white font-mono shadow-md text-lg">
+                    ► RESUME
+                </button>
+                <button id="btn-pause-main-menu"
+                    class="w-full p-3 bg-red-800 hover:bg-red-600 text-white font-mono shadow-md">
+                    EXIT TO MAIN MENU
+                </button>
+            </div>
+
+            <!-- Options Section -->
+            <div class="border-t border-gray-600 pt-4">
+                <h3 class="text-sm font-mono text-yellow-400 mb-4">OPTIONS</h3>
+
+                <!-- CRT Filter -->
+                <div class="flex justify-between items-center mb-4">
+                    <span class="text-sm">CRT FILTER:</span>
+                    <button id="toggle-crt" class="px-4 py-1 bg-green-600 text-white font-mono text-sm"
+                        data-setting="on">ON</button>
+                </div>
+
+                <!-- Sound On/Off -->
+                <div class="flex justify-between items-center mb-4">
+                    <span class="text-sm">SOUND:</span>
+                    <button id="toggle-sound" class="px-4 py-1 bg-green-600 text-white font-mono text-sm"
+                        data-setting="on">ON</button>
+                </div>
+
+                <!-- Volume Sliders -->
+                <div class="space-y-4 mt-4">
+                    <!-- Master Volume -->
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs w-20">MASTER:</span>
+                        <input type="range" id="volume-master" min="0" max="100" value="80"
+                            class="flex-1 mx-3 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-red-500">
+                        <span id="volume-master-val" class="text-xs w-10 text-right">80%</span>
+                    </div>
+
+                    <!-- Music Volume -->
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs w-20">MUSIC:</span>
+                        <input type="range" id="volume-music" min="0" max="100" value="70"
+                            class="flex-1 mx-3 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                        <span id="volume-music-val" class="text-xs w-10 text-right">70%</span>
+                    </div>
+
+                    <!-- FX Volume -->
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs w-20">FX:</span>
+                        <input type="range" id="volume-fx" min="0" max="100" value="100"
+                            class="flex-1 mx-3 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-yellow-500">
+                        <span id="volume-fx-val" class="text-xs w-10 text-right">100%</span>
+                    </div>
+                </div>
+            </div>
+
+            <p class="text-center text-xs text-gray-500 mt-6">Press ESC to resume</p>
+        </div>
+    </div>
+
+    <!-- 5b. Main Menu Options Overlay (Settings only, no Resume/Exit) -->
+    <div id="main-menu-options" class="screen hidden bg-black bg-opacity-80">
+        <div class="menu-card p-6" style="min-width: 400px;">
+            <h2 class="title-bar text-2xl text-white mb-6 text-center">OPTIONS</h2>
+
+            <!-- Options Section -->
+            <div class="space-y-4">
+                <!-- CRT Filter -->
+                <div class="flex justify-between items-center">
+                    <span class="text-sm">CRT FILTER:</span>
+                    <button id="mm-toggle-crt" class="px-4 py-1 bg-green-600 text-white font-mono text-sm"
+                        data-setting="on">ON</button>
+                </div>
+
+                <!-- Sound On/Off -->
+                <div class="flex justify-between items-center">
+                    <span class="text-sm">SOUND:</span>
+                    <button id="mm-toggle-sound" class="px-4 py-1 bg-green-600 text-white font-mono text-sm"
+                        data-setting="on">ON</button>
+                </div>
+
+                <!-- Volume Sliders -->
+                <div class="space-y-4 mt-4 border-t border-gray-600 pt-4">
+                    <!-- Master Volume -->
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs w-20">MASTER:</span>
+                        <input type="range" id="mm-volume-master" min="0" max="100" value="80"
+                            class="flex-1 mx-3 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-red-500">
+                        <span id="mm-volume-master-val" class="text-xs w-10 text-right">80%</span>
+                    </div>
+
+                    <!-- Music Volume -->
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs w-20">MUSIC:</span>
+                        <input type="range" id="mm-volume-music" min="0" max="100" value="70"
+                            class="flex-1 mx-3 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                        <span id="mm-volume-music-val" class="text-xs w-10 text-right">70%</span>
+                    </div>
+
+                    <!-- FX Volume -->
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs w-20">FX:</span>
+                        <input type="range" id="mm-volume-fx" min="0" max="100" value="100"
+                            class="flex-1 mx-3 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-yellow-500">
+                        <span id="mm-volume-fx-val" class="text-xs w-10 text-right">100%</span>
+                    </div>
+                </div>
+            </div>
+
+            <button id="btn-back-mm-options"
+                class="w-full mt-6 p-3 bg-gray-600 hover:bg-gray-500 text-white font-mono shadow-md">
+                [ B ] BACK
+            </button>
+        </div>
+    </div>
+
+    <!-- 6. How To Play Menu -->
+    <div id="how-to-play-menu" class="screen hidden bg-black bg-opacity-70">
+        <div class="menu-card p-4 text-sm font-sans" style="max-height: 80vh; overflow-y: auto;">
+            <h2 class="title-bar text-xl text-white mb-4 font-mono">HOW TO PLAY</h2>
+
+            <p class="mb-2 font-mono text-xs text-yellow-400">MOVEMENT:</p>
+            <ul class="list-disc list-inside ml-4 mb-4 text-xs">
+                <li><span class="text-green-400">W/A/S/D</span> or <span class="text-green-400">ARROW KEYS</span> - Move
+                    character</li>
+                <li><span class="text-green-400">LEFT CLICK</span> - Click to move (point & click)</li>
+                <li><span class="text-green-400">SPACEBAR</span> - Jump</li>
+            </ul>
+
+            <p class="mb-2 font-mono text-xs text-yellow-400">INTERACTION:</p>
+            <ul class="list-disc list-inside ml-4 mb-4 text-xs">
+                <li><span class="text-green-400">E</span> or <span class="text-green-400">LEFT CLICK</span> - Interact
+                    with objects</li>
+                <li><span class="text-green-400">DRAG</span> - Rotate items during inspection</li>
+            </ul>
+
+            <p class="mb-2 font-mono text-xs text-yellow-400">INVENTORY & ITEMS:</p>
+            <ul class="list-disc list-inside ml-4 mb-4 text-xs">
+                <li><span class="text-green-400">TAB</span> - Open/Close inventory</li>
+                <li><span class="text-green-400">1-9</span> - Quick select inventory slot</li>
+                <li><span class="text-green-400">LEFT/RIGHT</span> - Navigate inventory</li>
+                <li><span class="text-green-400">ENTER</span> - Use selected item</li>
+            </ul>
+
+            <p class="mb-2 font-mono text-xs text-yellow-400">FLASHLIGHT:</p>
+            <ul class="list-disc list-inside ml-4 mb-4 text-xs">
+                <li><span class="text-green-400">F</span> - Toggle flashlight on/off</li>
+                <li><span class="text-red-400">TIP:</span> Shine on walls to reveal hidden codes!</li>
+            </ul>
+
+            <p class="mb-2 font-mono text-xs text-yellow-400">MENUS:</p>
+            <ul class="list-disc list-inside ml-4 mb-4 text-xs">
+                <li><span class="text-green-400">ESC</span> - Open options menu / Close popups</li>
+                <li><span class="text-green-400">M</span> - Return to main menu</li>
+            </ul>
+
+            <p class="mb-2 font-mono text-xs text-yellow-400">DEBUG (DEV):</p>
+            <ul class="list-disc list-inside ml-4 mb-4 text-xs">
+                <li><span class="text-green-400">`</span> (Backtick) - Toggle debug panel</li>
+            </ul>
+
+            <p class="mb-2 font-mono text-xs text-yellow-400">GOAL:</p>
+            <p class="mb-4 text-xs">Explore rooms, solve puzzles, and find clues to unlock the secret room. Use your
+                flashlight to reveal hidden messages!</p>
+
+            <button id="btn-back-howto" class="w-full mt-4 p-2 bg-gray-500 text-black font-mono shadow-md">[ B ]
+                BACK</button>
+        </div>
+    </div>
+
+    <!-- 6b. Bug Report Menu -->
+    <div id="bug-report-menu" class="screen hidden bg-black bg-opacity-70">
+        <div class="menu-card p-4 text-sm font-sans" style="max-width: 500px;">
+            <h2 class="title-bar text-xl text-white mb-4 font-mono">BUG REPORT</h2>
+
+            <p class="mb-4 text-xs text-ps1-light">Found a bug? Help us improve SYNTHEYE!</p>
+
+            <div class="space-y-3 mb-4">
+                <p class="text-xs font-mono text-yellow-400">REPORT OPTIONS:</p>
+                <ul class="list-disc list-inside ml-4 text-xs space-y-2">
+                    <li>
+                        <a href="https://github.com/liminallyspaced/Syntheye/issues" target="_blank"
+                            class="text-blue-400 hover:text-blue-300 underline">
+                            Open GitHub Issue
+                        </a>
+                    </li>
+                    <li>
+                        <a href="mailto:bugs@syntheye.dev?subject=SYNTHEYE Bug Report"
+                            class="text-blue-400 hover:text-blue-300 underline">
+                            Email Bug Report
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
+            <p class="text-xs text-gray-400 mb-4">Please include: steps to reproduce, expected behavior, and any error
+                messages from the console (press F12).</p>
+
+            <button id="btn-back-bugreport" class="w-full mt-4 p-2 bg-gray-500 text-black font-mono shadow-md">[ B ]
+                BACK</button>
+        </div>
+    </div>
+
+    <!-- 6c. Credits Menu -->
+    <div id="credits-menu" class="screen hidden bg-black bg-opacity-70">
+        <div class="menu-card p-4 text-sm font-sans" style="max-width: 500px;">
+            <h2 class="title-bar text-xl text-white mb-4 font-mono">CREDITS</h2>
+
+            <div class="space-y-4 text-xs">
+                <div>
+                    <p class="font-mono text-yellow-400 mb-1">DEVELOPMENT</p>
+                    <p class="text-ps1-light">Dark Harbor Interactive</p>
+                </div>
+
+                <div>
+                    <p class="font-mono text-yellow-400 mb-1">GAME DESIGN & ART</p>
+                    <p class="text-ps1-light">liminallyspaced</p>
+                </div>
+
+                <div>
+                    <p class="font-mono text-yellow-400 mb-1">ENGINE</p>
+                    <p class="text-ps1-light">Three.js</p>
+                </div>
+
+                <div>
+                    <p class="font-mono text-yellow-400 mb-1">SPECIAL THANKS</p>
+                    <p class="text-ps1-light">You, for playing!</p>
+                </div>
+
+                <div class="pt-4 border-t border-gray-600">
+                    <p class="font-mono text-gray-400">SYNTHEYE v1.2</p>
+                    <p class="text-gray-500">© 2024 Dark Harbor Interactive</p>
+                </div>
+            </div>
+
+            <button id="btn-back-credits" class="w-full mt-4 p-2 bg-gray-500 text-black font-mono shadow-md">[ B ]
+                BACK</button>
+        </div>
+    </div>
+
+    <!-- 7. Padlock Puzzle Overlay -->
+    <div id="padlock-overlay" class="hidden">
+        <div id="padlock-container">
+            <!-- Dynamically generated by padlock.js -->
+        </div>
+    </div>
+
+    <!-- Reset Button (Bottom Left) -->
+    <button id="reset-btn" style="
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        padding: 10px 15px;
+        background: rgba(0, 0, 0, 0.7);
+        border: 2px solid #555;
+        color: #aaa;
+        font-family: 'Press Start 2P', monospace;
+        font-size: 10px;
+        cursor: pointer;
+        z-index: 100;
+        transition: all 0.2s ease;
+    " onmouseover="this.style.borderColor='#0ff'; this.style.color='#0ff';"
+        onmouseout="this.style.borderColor='#555'; this.style.color='#aaa';">
+        [R] RESET
+    </button>
+
+    <!-- =================================================================================
+         SYNTHEYE v1.1 - MODULAR EDITION
+         All JavaScript has been moved to /js/ folder using ES modules.
+         See /js/main.js for the entry point.
+         ================================================================================= -->
+    <script type="module" src="./js/main.js"></script>
+</body>
+
+</html>

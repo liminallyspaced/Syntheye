@@ -1,0 +1,9 @@
+[build]
+  # Netlify usually detects static sites, but this ensures it looks in the root
+  publish = "." 
+  # A dummy command to prevent it from looking for a build script if none exists
+  command = "echo 'Deploying Static HTML Site'"
+
+[build.environment]
+  # Using the specific version 20.10.0 as explicitly suggested by the Netlify error log
+  NODE_VERSION = "20.10.0"
