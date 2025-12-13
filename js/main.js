@@ -40,6 +40,7 @@ import { toggleInventory, isInventoryOpen } from './inventory.js';
 import { initFlashlight, updateFlashlight, toggleFlashlight } from './flashlight.js';
 import { isPadlockOpen, handlePadlockKeydown, closePadlock } from './padlock.js';
 import { initDebugMenu, updateDebugValues, handleDebugKeydown, handleDebugKeyup } from './debug.js';
+import { debugManager } from './debug/DebugManager.js';
 import { initNarration, showNarration, checkSelfDialogTriggers } from './narration.js';
 import { updateCameraZone, setInitialZone, resetCameraZones, initCameraForRoom } from './camera-zones.js';
 import { initIntro } from './intro.js';
@@ -362,8 +363,12 @@ window.onload = () => {
     // Initialize inventory UI
     initInventoryUI();
 
-    // Initialize debug menu (press ` to toggle)
+    // Initialize debug menu (camera debug)
     initDebugMenu();
+
+    // Initialize unified debug system (single * key controls all)
+    debugManager.init();
+    window.debugManager = debugManager;
 
     // Initialize narration system
     initNarration();
@@ -511,6 +516,12 @@ window.onload = () => {
 
     // How-to-play menu back button
     document.getElementById('btn-back-howto')?.addEventListener('click', () => {
+        SoundManager.playBlip();
+        hideMenu('how-to-play-menu');
+    });
+
+    // How-to-play menu X close button
+    document.getElementById('btn-close-howto')?.addEventListener('click', () => {
         SoundManager.playBlip();
         hideMenu('how-to-play-menu');
     });

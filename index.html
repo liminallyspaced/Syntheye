@@ -314,33 +314,7 @@
 
 <body class="font-mono bg-black crt-active">
 
-    <!-- DEBUG BUTTON - Click to copy camera debug logs -->
-    <button id="debug-copy-btn" onclick="copyDebugLogs()" style="
-        position: fixed;
-        top: 10px;
-        right: 10px;
-        z-index: 99999;
-        padding: 10px 15px;
-        background: #ff0;
-        color: #000;
-        font-family: monospace;
-        font-weight: bold;
-        border: 2px solid #000;
-        cursor: pointer;
-    ">📋 COPY DEBUG</button>
-    <script>
-        function copyDebugLogs() {
-            const logs = window.cameraDebugLogs || [];
-            if (logs.length === 0) {
-                alert('No camera debug logs yet. Make a pinch gesture first!');
-                return;
-            }
-            navigator.clipboard.writeText(logs.join('\n')).then(() => {
-                alert('Debug logs copied! Paste them back to share with me.');
-                window.cameraDebugLogs = [];
-            }).catch(err => alert('Copy failed: ' + err));
-        }
-    </script>
+    <!-- Debug copy button removed - debug now controlled by * key via DebugManager -->
 
     <!-- MODE INDICATOR - Shows current control mode (Left Ctrl to toggle) - TOP LEFT (hidden by default) -->
     <div id="mode-indicator" style="
@@ -765,26 +739,7 @@
     </div>
 
     <script>
-        // Debug panel toggle with * key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === '*') {
-                const panel = document.getElementById('levitation-debug');
-                const wasVisible = panel.style.display !== 'none';
-                panel.style.display = wasVisible ? 'none' : 'block';
-
-                // When closing debug panel, reset debug-only state
-                if (wasVisible) {
-                    // Clear aim assist lock (runtime only, not config)
-                    if (window.aimAssist) window.aimAssist.resetLock();
-
-                    // Clear tracer state
-                    window.ENABLE_TRACER = false;
-                    window.COLLISION_LOG = [];
-
-                    console.log('Debug panel closed - debug state reset');
-                }
-            }
-        });
+        // Debug panel toggle now handled by DebugManager.js (single * key)
 
         // Store settings globally for LevitationSystem to use
         window.levitationSettings = {
@@ -1317,7 +1272,28 @@ gestureCamera: ${settings.gestureCamera}`;
 
     <!-- 6. How To Play Menu -->
     <div id="how-to-play-menu" class="screen hidden bg-black bg-opacity-70">
-        <div class="menu-card p-4 text-sm font-sans" style="max-height: 80vh; overflow-y: auto;">
+        <div class="menu-card p-4 text-sm font-sans" style="max-height: 80vh; overflow-y: auto; position: relative;">
+            <!-- X close button -->
+            <button id="btn-close-howto" style="
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                width: 30px;
+                height: 30px;
+                background: rgba(80, 80, 80, 0.8);
+                border: 2px solid #888;
+                border-radius: 4px;
+                color: #fff;
+                font-size: 16px;
+                font-weight: bold;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.15s ease;
+            " onmouseover="this.style.background='#c00'; this.style.borderColor='#f00';"
+                onmouseout="this.style.background='rgba(80,80,80,0.8)'; this.style.borderColor='#888';">✕</button>
+
             <h2 class="title-bar text-xl text-white mb-4 font-mono">HOW TO PLAY</h2>
 
             <p class="mb-2 font-mono text-xs text-yellow-400">MOVEMENT:</p>
@@ -1357,7 +1333,7 @@ gestureCamera: ${settings.gestureCamera}`;
 
             <p class="mb-2 font-mono text-xs text-yellow-400">DEBUG (DEV):</p>
             <ul class="list-disc list-inside ml-4 mb-4 text-xs">
-                <li><span class="text-green-400">`</span> (Backtick) - Toggle debug panel</li>
+                <li><span class="text-green-400">*</span> (Shift+8) - Toggle ALL debug panels</li>
             </ul>
 
             <p class="mb-2 font-mono text-xs text-yellow-400">GOAL:</p>

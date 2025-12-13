@@ -64,6 +64,10 @@ function createIntroScreens() {
         z-index: 10000;
     `;
 
+    // YouTube video IDs
+    const LOGO_VIDEO_ID = 'ejx82QsF_ws';      // Syntheye Logo
+    const LOADING_VIDEO_ID = 'EYJL3ydeUXk';   // Loading Screen
+
     // Boot Logo 1 - Dark Harbor Interactive
     introContainer.innerHTML = `
         <div id="boot-logo-1" class="intro-screen" style="display: none;">
@@ -74,15 +78,27 @@ function createIntroScreens() {
         </div>
         
         <div id="boot-logo-2" class="intro-screen" style="display: none;">
-            <video id="syntheye-logo-video" class="logo-video" playsinline>
-                <source src="./assets/videos/SYNTHEYE_Logo.mp4" type="video/mp4">
-            </video>
+            <div class="youtube-container" id="yt-logo-container">
+                <iframe id="yt-logo-player"
+                    src="https://www.youtube.com/embed/${LOGO_VIDEO_ID}?autoplay=0&controls=0&disablekb=1&modestbranding=1&rel=0&showinfo=0&enablejsapi=1&origin=${window.location.origin}&playsinline=1"
+                    frameborder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowfullscreen
+                    style="width: 100vw; height: 100vh; pointer-events: none;">
+                </iframe>
+            </div>
         </div>
         
         <div id="loading-screen" class="intro-screen" style="display: none;">
-            <video id="loading-video" class="logo-video" playsinline>
-                <source src="./assets/videos/LoadingScreen.mp4" type="video/mp4">
-            </video>
+            <div class="youtube-container" id="yt-loading-container">
+                <iframe id="yt-loading-player"
+                    src="https://www.youtube.com/embed/${LOADING_VIDEO_ID}?autoplay=0&controls=0&disablekb=1&modestbranding=1&rel=0&showinfo=0&enablejsapi=1&origin=${window.location.origin}&playsinline=1"
+                    frameborder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowfullscreen
+                    style="width: 100vw; height: 100vh; pointer-events: none;">
+                </iframe>
+            </div>
         </div>
         
         <div id="demo-reel" class="intro-screen" style="display: none;">
@@ -115,6 +131,13 @@ function createIntroScreens() {
                 transition: opacity 0.5s ease;
             }
             .intro-screen.active { opacity: 1; }
+            
+            .youtube-container {
+                width: 100%;
+                height: 100%;
+                overflow: hidden;
+                pointer-events: none;
+            }
             
             .boot-logo-content, .loading-content, .demo-content, .press-start-content {
                 text-align: center;
@@ -204,6 +227,53 @@ function createIntroScreens() {
     `;
 
     document.body.appendChild(introContainer);
+
+    // Setup YouTube API for video end detection
+    setupYouTubeAPI();
+}
+
+// YouTube player references
+let ytLogoPlayer = null;
+let ytLoadingPlayer = null;
+
+function setupYouTubeAPI() {
+    // Load YouTube IFrame API if not already loaded
+    if (!window.YT) {
+        const tag = document.createElement('script');
+        tag.src = 'https://www.youtube.com/iframe_api';
+        const firstScript = document.getElementsByTagName('script')[0];
+        firstScript.parentNode.insertBefore(tag, firstScript);
+    }
+
+    // Setup callback when API is ready
+    window.onYouTubeIframeAPIReady = () => {
+        console.log('YouTube API ready');
+
+        // Create player objects for both videos
+        ytLogoPlayer = new YT.Player('yt-logo-player', {
+            events: {
+                'onStateChange': (event) => {
+                    if (event.data === YT.PlayerState.ENDED) {
+                        if (currentScreen === 1) { // boot-logo-2
+                            nextScreen();
+                        }
+                    }
+                }
+            }
+        });
+
+        ytLoadingPlayer = new YT.Player('yt-loading-player', {
+            events: {
+                'onStateChange': (event) => {
+                    if (event.data === YT.PlayerState.ENDED) {
+                        if (currentScreen === 2) { // loading-screen
+                            nextScreen();
+                        }
+                    }
+                }
+            }
+        });
+    };
 }
 
 // =================================================================================
@@ -230,19 +300,32 @@ function showScreen(index) {
         screen.style.display = 'flex';
         setTimeout(() => screen.classList.add('active'), 50);
 
-        // Handle video screens - auto-advance when video ends
-        const video = screen.querySelector('video');
-        if (video && screenConfig.type === 'video') {
-            video.currentTime = 0;
-            video.volume = 1.0;
-            video.play().catch(err => {
-                console.log('Video play error:', err);
-            });
-            video.onended = () => {
-                if (currentScreen === index) {
-                    nextScreen();
+        // Handle YouTube video screens
+        if (screenConfig.type === 'video') {
+            if (screenConfig.id === 'boot-logo-2' && ytLogoPlayer && ytLogoPlayer.playVideo) {
+                // Play Syntheye Logo YouTube video
+                ytLogoPlayer.setVolume(100);
+                ytLogoPlayer.playVideo();
+            } else if (screenConfig.id === 'loading-screen' && ytLoadingPlayer && ytLoadingPlayer.playVideo) {
+                // Play Loading Screen YouTube video
+                ytLoadingPlayer.setVolume(100);
+                ytLoadingPlayer.playVideo();
+            } else {
+                // Handle regular video (demo reel)
+                const video = screen.querySelector('video');
+                if (video) {
+                    video.currentTime = 0;
+                    video.volume = 1.0;
+                    video.play().catch(err => {
+                        console.log('Video play error:', err);
+                    });
+                    video.onended = () => {
+                        if (currentScreen === index) {
+                            nextScreen();
+                        }
+                    };
                 }
-            };
+            }
         }
     }
 
@@ -260,9 +343,18 @@ function showScreen(index) {
 // NEXT SCREEN
 // =================================================================================
 function nextScreen() {
-    // Stop any currently playing video before advancing
+    // Stop any currently playing video/YouTube before advancing
     const currentScreenConfig = INTRO_SCREENS[currentScreen];
     if (currentScreenConfig) {
+        // Stop YouTube videos
+        if (currentScreenConfig.id === 'boot-logo-2' && ytLogoPlayer && ytLogoPlayer.stopVideo) {
+            ytLogoPlayer.stopVideo();
+        }
+        if (currentScreenConfig.id === 'loading-screen' && ytLoadingPlayer && ytLoadingPlayer.stopVideo) {
+            ytLoadingPlayer.stopVideo();
+        }
+
+        // Stop regular videos
         const currentScreenEl = document.getElementById(currentScreenConfig.id);
         if (currentScreenEl) {
             const video = currentScreenEl.querySelector('video');
