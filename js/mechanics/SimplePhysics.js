@@ -98,20 +98,26 @@ export class SimplePhysics {
         this.forceAccumulator.set(0, 0, 0);
         this.torqueAccumulator.set(0, 0, 0);
 
-        // Floor collision
+        // Floor collision - preserve tangential velocity
         if (this.mesh.position.y < this.floorY) {
             this.mesh.position.y = this.floorY;
 
-            if (Math.abs(this.velocity.y) > 0.5) {
+            const minBounceSpeed = 1.0; // Below this, no bounce (prevents jitter)
+
+            if (Math.abs(this.velocity.y) > minBounceSpeed) {
+                // Bounce: reflect only normal component, keep tangential
                 this.velocity.y = -this.velocity.y * this.elasticity;
-                this.velocity.x *= 0.8;
-                this.velocity.z *= 0.8;
+                // Apply friction to tangential (but don't kill it)
+                this.velocity.x *= 0.95;
+                this.velocity.z *= 0.95;
                 this.isGround = false;
             } else {
+                // Too slow to bounce - just settle, but keep sliding
                 this.velocity.y = 0;
                 this.isGround = true;
-                this.velocity.x *= 0.9;
-                this.velocity.z *= 0.9;
+                // Light friction for sliding, not instant stop
+                this.velocity.x *= 0.98;
+                this.velocity.z *= 0.98;
             }
         } else {
             this.isGround = false;

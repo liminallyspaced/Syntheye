@@ -668,50 +668,89 @@ function initHandTracking() {
                                         let currentMode = 'A'; // Start with Levitate active
                                         const modeTextEl = document.getElementById('mode-text');
                                         const modeIndicatorEl = document.getElementById('mode-indicator');
+                                        const powerWheelEl = document.getElementById('power-wheel');
 
-                                        // Left Ctrl cycles mode: NONE → A → B → NONE
-                                        document.addEventListener('keydown', (e) => {
-                                            if (e.code === 'ControlLeft' || e.code === 'ControlRight') {
-                                                // === ATOMIC POWER TRANSITION ===
-                                                const oldMode = currentMode;
+                                        // Track gesture transitions (declared before setActivePower uses them)
+                                        let previousGesture = GESTURE.NONE;
+                                        let transitionCooldownFrames = 0;
 
-                                                // Cycle: NONE → A → B → NONE
-                                                if (currentMode === 'NONE') currentMode = 'A';
-                                                else if (currentMode === 'A') currentMode = 'B';
-                                                else currentMode = 'NONE';
+                                        // === ATOMIC POWER TRANSITION FUNCTION ===
+                                        function setActivePower(newMode) {
+                                            const oldMode = currentMode;
+                                            if (newMode === oldMode) return;
 
-                                                // 1. Reset aim assist lock (runtime only)
-                                                aimAssist.resetLock();
+                                            currentMode = newMode;
 
-                                                // 2. Clear gesture cooldowns (will use these later)
-                                                // transitionCooldownFrames = 0; previousGesture = GESTURE.NONE;
+                                            // 1. Reset aim assist lock (runtime only)
+                                            aimAssist.resetLock();
 
-                                                // 3. Update UI
-                                                if (modeTextEl) {
-                                                    if (currentMode === 'A') {
-                                                        modeTextEl.textContent = 'MODE A: LEVITATE';
-                                                        modeIndicatorEl.style.borderColor = '#00ffff';
-                                                        modeTextEl.style.color = '#00ffff';
-                                                    } else if (currentMode === 'B') {
-                                                        modeTextEl.textContent = 'MODE B: WIND';
-                                                        modeIndicatorEl.style.borderColor = '#ff00ff';
-                                                        modeTextEl.style.color = '#ff00ff';
-                                                    } else {
-                                                        modeTextEl.textContent = 'MODE X: NONE';
-                                                        modeIndicatorEl.style.borderColor = '#888888';
-                                                        modeTextEl.style.color = '#888888';
-                                                    }
+                                            // 2. Clear gesture cooldowns
+                                            transitionCooldownFrames = 0;
+                                            previousGesture = GESTURE.NONE;
+
+                                            // 3. Update UI
+                                            if (modeTextEl) {
+                                                if (currentMode === 'A') {
+                                                    modeTextEl.textContent = 'MODE A: LEVITATE';
+                                                    modeIndicatorEl.style.borderColor = '#00ffff';
+                                                    modeTextEl.style.color = '#00ffff';
+                                                } else if (currentMode === 'B') {
+                                                    modeTextEl.textContent = 'MODE B: WIND';
+                                                    modeIndicatorEl.style.borderColor = '#ff00ff';
+                                                    modeTextEl.style.color = '#ff00ff';
+                                                } else {
+                                                    modeTextEl.textContent = 'MODE X: NONE';
+                                                    modeIndicatorEl.style.borderColor = '#888888';
+                                                    modeTextEl.style.color = '#888888';
                                                 }
-                                                console.log(`Power: ${oldMode} → ${currentMode}`);
                                             }
+
+                                            // 4. Update wheel selection highlight
+                                            document.querySelectorAll('.wheel-option').forEach(el => {
+                                                el.classList.toggle('selected', el.dataset.power === currentMode);
+                                            });
+
+                                            console.log(`Power: ${oldMode} → ${currentMode}`);
+                                        }
+
+                                        // === POWER WHEEL - Hold Q to show ===
+                                        let wheelVisible = false;
+
+                                        document.addEventListener('keydown', (e) => {
+                                            if (e.code === 'KeyQ' && !wheelVisible) {
+                                                wheelVisible = true;
+                                                if (powerWheelEl) {
+                                                    powerWheelEl.style.display = 'block';
+                                                    // Highlight current selection
+                                                    document.querySelectorAll('.wheel-option').forEach(el => {
+                                                        el.classList.toggle('selected', el.dataset.power === currentMode);
+                                                    });
+                                                }
+                                            }
+                                        });
+
+                                        document.addEventListener('keyup', (e) => {
+                                            if (e.code === 'KeyQ') {
+                                                wheelVisible = false;
+                                                if (powerWheelEl) {
+                                                    powerWheelEl.style.display = 'none';
+                                                }
+                                            }
+                                        });
+
+                                        // Wheel option click handlers
+                                        document.querySelectorAll('.wheel-option').forEach(el => {
+                                            el.addEventListener('click', () => {
+                                                const power = el.dataset.power;
+                                                if (power) {
+                                                    setActivePower(power);
+                                                }
+                                            });
                                         });
 
                                         // Expose mode globally for other systems
                                         window.getControlMode = () => currentMode;
-
-                                        // Track gesture transitions
-                                        let previousGesture = GESTURE.NONE;
-                                        let transitionCooldownFrames = 0;
+                                        window.setActivePower = setActivePower;
 
                                         // Track hand velocity for fast movement detection
                                         let lastHandY = 0;

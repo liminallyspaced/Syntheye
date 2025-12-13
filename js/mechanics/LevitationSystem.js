@@ -238,9 +238,24 @@ export class LevitationSystem {
     }
 
     dropObject() {
+        // === ATOMIC RELEASE ===
         this.state = STATE.IDLE;
         this.physics.setLevitating(false);
+
+        // Clear aim assist lock
+        if (window.aimAssist) {
+            window.aimAssist.resetLock();
+        }
+
+        // Clear hold references
+        this.resetReferencePoints();
+
+        // Visual feedback
         this.targetObject.material.color.setHex(0xFF6600);
+
+        // Cooldown to prevent instant re-grab (hysteresis)
+        this.grabCooldown = 0.15; // 150ms
+
         console.log("Levitation: Object Dropped!");
     }
 
@@ -389,6 +404,28 @@ export class LevitationSystem {
         this.targetPosition.add(right.multiplyScalar(this.handOffsetX));
         this.targetPosition.y += this.handOffsetY;
 
+        // === AIM ASSIST - Soft snap toward hoop ===
+        // Apply post-processing nudge when near valid targets
+        if (window.aimAssist && window.basketballHoop) {
+            const hoopCenter = window.basketballHoop.hoopCenter;
+            if (hoopCenter) {
+                // Build candidate targets list
+                const candidates = [
+                    { id: 'hoop', position: hoopCenter }
+                ];
+
+                // Apply aim assist - returns adjusted position
+                const assisted = window.aimAssist.apply(
+                    this.targetPosition,
+                    candidates,
+                    0.016 // deltaTime
+                );
+
+                // Use assisted position
+                this.targetPosition.copy(assisted);
+            }
+        }
+
         // === WALL PROJECTION ===
         // Clamp target position to stay inside room bounds
         const margin = (window.ballRadius || 0.25) + 0.2;
@@ -405,9 +442,53 @@ export class LevitationSystem {
 
     /**
      * Throw using momentum-based velocity
+     * ATOMIC RELEASE ORDERING: release state FIRST, then apply impulse ONCE
      */
     throwObject() {
-        // Calculate average velocity from history
+        // =====================================================
+        // 1. ATOMIC RELEASE - Clear hold state FIRST (same frame)
+        // =====================================================
+
+        // a) Change state to IDLE immediately
+        this.state = STATE.IDLE;
+
+        // b) Disable levitation (no more stabilization forces)
+        this.physics.setLevitating(false);
+
+        // c) Clear aim assist lock (runtime only, doesn't affect config)
+        if (window.aimAssist) {
+            window.aimAssist.resetLock();
+        }
+
+        // d) Clear any hold references
+        this.resetReferencePoints();
+
+        // e) Visual feedback
+        this.targetObject.material.color.setHex(0xFF6600);
+
+        // f) Set cooldown to prevent accidental re-grab
+        this.grabCooldown = 0.3;
+
+        // =====================================================
+        // 2. COMPUTE THROW DIRECTION FROM RAW INPUT (not aim-assisted)
+        // =====================================================
+
+        // Use RAW hand velocity from gesture recognizer
+        let throwDirX = 0;
+        let throwDirY = 0;
+        let handSpeed = 0;
+        let wristFlick = 0;
+
+        if (this.gestureRecognizer) {
+            // RAW velocity - NOT aim-assist adjusted
+            const vel = this.gestureRecognizer.getVelocity();
+            handSpeed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
+            throwDirX = -vel.x * 80;
+            throwDirY = -vel.y * 80;
+            wristFlick = this.gestureRecognizer.getWristFlickVelocity();
+        }
+
+        // Calculate average momentum from history
         let avgVelocity = new THREE.Vector3(0, 0, 0);
         if (this.velocityHistory.length > 0) {
             for (const vel of this.velocityHistory) {
@@ -416,28 +497,14 @@ export class LevitationSystem {
             avgVelocity.divideScalar(this.velocityHistory.length);
         }
 
-        // Get hand velocity for throw direction
-        let throwDirX = 0;
-        let throwDirY = 0;
-        let handSpeed = 0;
-        let wristFlick = 0;
-
-        if (this.gestureRecognizer) {
-            const vel = this.gestureRecognizer.getVelocity();
-            handSpeed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
-            throwDirX = -vel.x * 80;
-            throwDirY = -vel.y * 80;
-            wristFlick = this.gestureRecognizer.getWristFlickVelocity();
-        }
-
-        // Base direction from camera
+        // Base direction from camera forward (NOT aim-assisted target)
         const forward = new THREE.Vector3(0, 0, -1);
         forward.applyQuaternion(this.camera.quaternion);
 
         // Calculate throw speed - slower flick = shorter throw
-        const minThrowSpeed = 2.0;  // Very gentle toss for slow flicks
+        const minThrowSpeed = 2.0;
         const maxThrowSpeed = 100.0;
-        const wristFlickMultiplier = 500;  // More responsive to flick speed
+        const wristFlickMultiplier = 500;
         const handSpeedMultiplier = 250;
 
         let throwSpeed = minThrowSpeed +
@@ -446,10 +513,8 @@ export class LevitationSystem {
 
         throwSpeed = Math.min(throwSpeed, maxThrowSpeed);
 
-        // Add momentum from tracked velocity
+        // Momentum bonus from tracked velocity
         const momentumBonus = avgVelocity.clone().multiplyScalar(0.5);
-
-        console.log(`Throw: speed=${throwSpeed.toFixed(1)}, wristFlick=${wristFlick.toFixed(4)}, momentum=${momentumBonus.length().toFixed(1)}`);
 
         // Upward boost for underhand toss
         let upwardBoost = 8;
@@ -458,29 +523,22 @@ export class LevitationSystem {
             if (vel.y < -0.01) {
                 const boostAmount = Math.abs(vel.y) * 300;
                 upwardBoost += boostAmount;
-                console.log(`Underhand toss boost: +${boostAmount.toFixed(1)}`);
             }
         }
 
-        // Apply final velocity
+        // =====================================================
+        // 3. APPLY ONE-SHOT IMPULSE (physics owns object after this)
+        // =====================================================
+
         const throwVelocity = new THREE.Vector3(
             forward.x * throwSpeed + throwDirX + momentumBonus.x,
             forward.y * throwSpeed + throwDirY + upwardBoost + momentumBonus.y,
             forward.z * throwSpeed + momentumBonus.z
         );
 
+        // Set velocity ONCE - physics takes over completely after this
         this.physics.setVelocity(throwVelocity.x, throwVelocity.y, throwVelocity.z);
 
-        // Release from levitation
-        this.state = STATE.IDLE;
-        this.physics.setLevitating(false);
-        this.targetObject.material.color.setHex(0xFF6600);
-
-        // Set cooldown to prevent accidental re-grab
-        this.grabCooldown = 0.3;
-
-        setTimeout(() => {
-            this.targetObject.material.color.setHex(0xFF6600);
-        }, 200);
+        console.log(`Throw: speed=${throwSpeed.toFixed(1)}, wristFlick=${wristFlick.toFixed(4)}, momentum=${momentumBonus.length().toFixed(1)}`);
     }
 }

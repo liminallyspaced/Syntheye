@@ -253,6 +253,8 @@ function loadCharacterModel(gltf) {
                 // Jump should play once, not loop
                 action.setLoop(THREE.LoopOnce);
                 action.clampWhenFinished = true;
+                // 50% faster animation
+                action.timeScale = 1.5;
             }
 
             // Map interact animation

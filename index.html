@@ -359,9 +359,133 @@
         pointer-events: none;
         display: none;
     ">
-        <div style="color: #888; font-size: 8px; margin-bottom: 4px;">CTRL TO SWITCH</div>
+        <div style="color: #888; font-size: 8px; margin-bottom: 4px;">HOLD Q FOR WHEEL</div>
         <div id="mode-text">MODE A: LEVITATE</div>
     </div>
+
+    <!-- POWER WHEEL - Hold Q to show (Test Level Only) -->
+    <div id="power-wheel" style="
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 100000;
+        display: none;
+        pointer-events: auto;
+    ">
+        <!-- Center circle -->
+        <div style="
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #888;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: monospace;
+            font-size: 10px;
+            color: #888;
+        ">POWERS</div>
+
+        <!-- Telekinesis (Top) -->
+        <div id="wheel-telekinesis" class="wheel-option" data-power="A" style="
+            position: absolute;
+            top: -80px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 80px;
+            background: rgba(0, 40, 40, 0.95);
+            border: 3px solid #0ff;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: monospace;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        ">
+            <div style="font-size: 24px;">🖐️</div>
+            <div style="font-size: 9px; color: #0ff; margin-top: 2px;">LEVITATE</div>
+        </div>
+
+        <!-- Wind (Bottom-Left) -->
+        <div id="wheel-wind" class="wheel-option" data-power="B" style="
+            position: absolute;
+            top: 40px;
+            left: -70px;
+            width: 80px;
+            height: 80px;
+            background: rgba(40, 0, 40, 0.95);
+            border: 3px solid #f0f;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: monospace;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        ">
+            <div style="font-size: 24px;">💨</div>
+            <div style="font-size: 9px; color: #f0f; margin-top: 2px;">WIND</div>
+        </div>
+
+        <!-- None (Bottom-Right) -->
+        <div id="wheel-none" class="wheel-option" data-power="NONE" style="
+            position: absolute;
+            top: 40px;
+            right: -70px;
+            width: 80px;
+            height: 80px;
+            background: rgba(40, 40, 40, 0.95);
+            border: 3px solid #888;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: monospace;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        ">
+            <div style="font-size: 24px;">❌</div>
+            <div style="font-size: 9px; color: #888; margin-top: 2px;">NONE</div>
+        </div>
+    </div>
+
+    <style>
+        .wheel-option:hover {
+            transform: scale(1.15);
+            box-shadow: 0 0 20px currentColor;
+        }
+
+        .wheel-option.selected {
+            transform: scale(1.2);
+            box-shadow: 0 0 30px currentColor;
+        }
+
+        #wheel-telekinesis:hover,
+        #wheel-telekinesis.selected {
+            box-shadow: 0 0 25px #0ff;
+        }
+
+        #wheel-wind:hover,
+        #wheel-wind.selected {
+            box-shadow: 0 0 25px #f0f;
+        }
+
+        #wheel-none:hover,
+        #wheel-none.selected {
+            box-shadow: 0 0 25px #888;
+        }
+    </style>
 
     <!-- Reset Buttons - Bottom Left (Test Level Only) -->
     <div id="reset-buttons" style="
@@ -645,7 +769,20 @@
         document.addEventListener('keydown', (e) => {
             if (e.key === '*') {
                 const panel = document.getElementById('levitation-debug');
-                panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+                const wasVisible = panel.style.display !== 'none';
+                panel.style.display = wasVisible ? 'none' : 'block';
+
+                // When closing debug panel, reset debug-only state
+                if (wasVisible) {
+                    // Clear aim assist lock (runtime only, not config)
+                    if (window.aimAssist) window.aimAssist.resetLock();
+
+                    // Clear tracer state
+                    window.ENABLE_TRACER = false;
+                    window.COLLISION_LOG = [];
+
+                    console.log('Debug panel closed - debug state reset');
+                }
             }
         });
 
@@ -1307,33 +1444,15 @@ gestureCamera: ${settings.gestureCamera}`;
         <div id="padlock-container">
             <!-- Dynamically generated by padlock.js -->
         </div>
-    </div>
 
-    <!-- Reset Button (Bottom Left) -->
-    <button id="reset-btn" style="
-        position: fixed;
-        bottom: 20px;
-        left: 20px;
-        padding: 10px 15px;
-        background: rgba(0, 0, 0, 0.7);
-        border: 2px solid #555;
-        color: #aaa;
-        font-family: 'Press Start 2P', monospace;
-        font-size: 10px;
-        cursor: pointer;
-        z-index: 100;
-        transition: all 0.2s ease;
-    " onmouseover="this.style.borderColor='#0ff'; this.style.color='#0ff';"
-        onmouseout="this.style.borderColor='#555'; this.style.color='#aaa';">
-        [R] RESET
-    </button>
+        <!-- Old [R] RESET button removed - replaced by Reset Items/Reset Camera buttons -->
 
-    <!-- =================================================================================
+        <!-- =================================================================================
          SYNTHEYE v1.1 - MODULAR EDITION
          All JavaScript has been moved to /js/ folder using ES modules.
          See /js/main.js for the entry point.
          ================================================================================= -->
-    <script type="module" src="./js/main.js"></script>
+        <script type="module" src="./js/main.js"></script>
 </body>
 
 </html>
