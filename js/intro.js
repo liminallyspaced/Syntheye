@@ -67,6 +67,7 @@ function createIntroScreens() {
     // YouTube video IDs
     const LOGO_VIDEO_ID = 'ejx82QsF_ws';      // Syntheye Logo
     const LOADING_VIDEO_ID = 'EYJL3ydeUXk';   // Loading Screen
+    const DEMO_REEL_VIDEO_ID = '8CHiM7MEtWU'; // Demo Reel 2025
 
     // Boot Logo 1 - Dark Harbor Interactive
     introContainer.innerHTML = `
@@ -102,9 +103,15 @@ function createIntroScreens() {
         </div>
         
         <div id="demo-reel" class="intro-screen" style="display: none;">
-            <video id="demo-reel-video" class="logo-video" playsinline>
-                <source src="./assets/videos/DEMO REEL2025.mp4" type="video/mp4">
-            </video>
+            <div class="youtube-container" id="yt-demo-container">
+                <iframe id="yt-demo-player"
+                    src="https://www.youtube.com/embed/${DEMO_REEL_VIDEO_ID}?autoplay=0&controls=0&disablekb=1&modestbranding=1&rel=0&showinfo=0&enablejsapi=1&origin=${window.location.origin}&playsinline=1"
+                    frameborder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowfullscreen
+                    style="width: 100vw; height: 100vh; pointer-events: none;">
+                </iframe>
+            </div>
         </div>
         
         <div id="press-start" class="intro-screen" style="display: none;">
@@ -235,6 +242,7 @@ function createIntroScreens() {
 // YouTube player references
 let ytLogoPlayer = null;
 let ytLoadingPlayer = null;
+let ytDemoPlayer = null;
 
 function setupYouTubeAPI() {
     // Load YouTube IFrame API if not already loaded
@@ -249,7 +257,7 @@ function setupYouTubeAPI() {
     window.onYouTubeIframeAPIReady = () => {
         console.log('YouTube API ready');
 
-        // Create player objects for both videos
+        // Create player objects for all YouTube videos
         ytLogoPlayer = new YT.Player('yt-logo-player', {
             events: {
                 'onStateChange': (event) => {
@@ -267,6 +275,18 @@ function setupYouTubeAPI() {
                 'onStateChange': (event) => {
                     if (event.data === YT.PlayerState.ENDED) {
                         if (currentScreen === 2) { // loading-screen
+                            nextScreen();
+                        }
+                    }
+                }
+            }
+        });
+
+        ytDemoPlayer = new YT.Player('yt-demo-player', {
+            events: {
+                'onStateChange': (event) => {
+                    if (event.data === YT.PlayerState.ENDED) {
+                        if (currentScreen === 3) { // demo-reel
                             nextScreen();
                         }
                     }
@@ -310,21 +330,10 @@ function showScreen(index) {
                 // Play Loading Screen YouTube video
                 ytLoadingPlayer.setVolume(100);
                 ytLoadingPlayer.playVideo();
-            } else {
-                // Handle regular video (demo reel)
-                const video = screen.querySelector('video');
-                if (video) {
-                    video.currentTime = 0;
-                    video.volume = 1.0;
-                    video.play().catch(err => {
-                        console.log('Video play error:', err);
-                    });
-                    video.onended = () => {
-                        if (currentScreen === index) {
-                            nextScreen();
-                        }
-                    };
-                }
+            } else if (screenConfig.id === 'demo-reel' && ytDemoPlayer && ytDemoPlayer.playVideo) {
+                // Play Demo Reel YouTube video
+                ytDemoPlayer.setVolume(100);
+                ytDemoPlayer.playVideo();
             }
         }
     }
@@ -353,16 +362,8 @@ function nextScreen() {
         if (currentScreenConfig.id === 'loading-screen' && ytLoadingPlayer && ytLoadingPlayer.stopVideo) {
             ytLoadingPlayer.stopVideo();
         }
-
-        // Stop regular videos
-        const currentScreenEl = document.getElementById(currentScreenConfig.id);
-        if (currentScreenEl) {
-            const video = currentScreenEl.querySelector('video');
-            if (video) {
-                video.pause();
-                video.currentTime = 0;
-                video.volume = 0;
-            }
+        if (currentScreenConfig.id === 'demo-reel' && ytDemoPlayer && ytDemoPlayer.stopVideo) {
+            ytDemoPlayer.stopVideo();
         }
     }
     showScreen(currentScreen + 1);
