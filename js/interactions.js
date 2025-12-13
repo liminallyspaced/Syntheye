@@ -524,6 +524,39 @@ export function startTransition(targetRoomKey, targetSpawn) {
 
     setTimeout(() => {
         document.getElementById('transition-text').textContent = '...DOOR CREAKING...';
+
+        // Clean up test level elements if leaving ROOM_TESTRANGE
+        if (STATE.current_room === 'ROOM_TESTRANGE' && targetRoomKey !== 'ROOM_TESTRANGE') {
+            // Hide test level UI
+            if (window.hideTestLevelUI) {
+                window.hideTestLevelUI();
+            }
+
+            // Hide hand tracker UI (webcam button, debug canvas)
+            if (window.handTracker && window.handTracker.hideUI) {
+                window.handTracker.hideUI();
+            }
+
+            // Dispose basketball hoop
+            if (window.basketballHoop && window.basketballHoop.dispose) {
+                window.basketballHoop.dispose();
+                window.basketballHoop = null;
+            }
+            // Remove levitation ball
+            import('./three-init.js').then(threeInit => {
+                if (threeInit.removeTestLevelElements) {
+                    threeInit.removeTestLevelElements();
+                }
+            }).catch(() => {
+                // Fallback: manually remove if import fails
+                if (window.levitationCube && window.levitationCube.parent) {
+                    window.levitationCube.parent.remove(window.levitationCube);
+                    window.levitationCube = null;
+                }
+            });
+            console.log('Test level elements cleaned up');
+        }
+
         setRoom(targetRoomKey, targetSpawn);
         // Reset movement again after room loads to ensure clean state
         resetMovement();

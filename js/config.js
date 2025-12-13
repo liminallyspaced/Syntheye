@@ -135,14 +135,17 @@ export const ROOM_DATA = {
             }
         ],
         geometry: [
-            // Floor - dark worn stage floor
-            { name: 'floor', dim: [24, 0.2, 24], pos: [0, 0, 0], color: 0x1a0a0a, collider: false },
+            // Floor - dark worn stage floor, extended back
+            { name: 'floor', dim: [24, 0.2, 42], pos: [0, 0, -9], color: 0x1a0a0a, collider: true },
 
-            // Walls - dark backstage walls
-            { name: 'wall_n', dim: [24, 12, 0.5], pos: [0, 6, -12], color: 0x2a1515, collider: true },
-            { name: 'wall_s', dim: [24, 12, 0.5], pos: [0, 6, 12], color: 0x2a1515, collider: true },
-            { name: 'wall_e', dim: [0.5, 12, 24], pos: [12, 6, 0], color: 0x2a1515, collider: true },
-            { name: 'wall_w', dim: [0.5, 12, 24], pos: [-12, 6, 0], color: 0x2a1515, collider: true },
+            // Ceiling
+            { name: 'ceiling', dim: [24, 0.2, 42], pos: [0, 15, -9], color: 0x111111, collider: true },
+
+            // Walls - dark backstage walls, extended and higher
+            { name: 'wall_n', dim: [24, 15, 0.5], pos: [0, 7.5, -24], color: 0x2a1515, collider: true },
+            { name: 'wall_s', dim: [24, 15, 0.5], pos: [0, 7.5, 12], color: 0x2a1515, collider: true },
+            { name: 'wall_e', dim: [0.5, 15, 42], pos: [12, 7.5, -9], color: 0x2a1515, collider: true },
+            { name: 'wall_w', dim: [0.5, 15, 42], pos: [-12, 7.5, -9], color: 0x2a1515, collider: true },
 
             // === CENTRAL STATUE (puzzle focal point) ===
             { name: 'statue_body', dim: [1.2, 3.5, 1.2], pos: [0, 1.75, 0], color: 0x555555, collider: true },
@@ -1244,31 +1247,34 @@ export const ROOM_DATA = {
             }
         ],
         geometry: [
-            // Floor - industrial grey
-            { name: 'floor', dim: [30, 0.2, 30], pos: [0, 0, 0], color: 0x333333, collider: false },
+            // Floor - industrial grey, extended back (collider for ball physics)
+            { name: 'floor', dim: [30, 0.2, 50], pos: [0, 0, -5], color: 0x333333, collider: true },
 
-            // Walls
-            { name: 'wall_n', dim: [30, 10, 0.5], pos: [0, 5, -15], color: 0x444444, collider: true },
-            { name: 'wall_s', dim: [30, 10, 0.5], pos: [0, 5, 15], color: 0x444444, collider: true },
-            { name: 'wall_e', dim: [0.5, 10, 30], pos: [15, 5, 0], color: 0x444444, collider: true },
-            { name: 'wall_w', dim: [0.5, 10, 30], pos: [-15, 5, 0], color: 0x444444, collider: true },
+            // Ceiling (collider for ball physics)
+            { name: 'ceiling', dim: [30, 0.2, 50], pos: [0, 15, -5], color: 0x222222, collider: true },
+
+            // Walls - extended and higher
+            { name: 'wall_n', dim: [30, 15, 0.5], pos: [0, 7.5, -25], color: 0x444444, collider: true },
+            { name: 'wall_s', dim: [30, 15, 0.5], pos: [0, 7.5, 15], color: 0x444444, collider: true },
+            { name: 'wall_e', dim: [0.5, 15, 50], pos: [15, 7.5, -5], color: 0x444444, collider: true },
+            { name: 'wall_w', dim: [0.5, 15, 50], pos: [-15, 7.5, -5], color: 0x444444, collider: true },
 
             // Divider Wall (Medium height) - player stands behind this
             { name: 'divider_wall', dim: [20, 3, 0.5], pos: [0, 1.5, 2], color: 0x555555, collider: true },
             // Counter/Shelf on top of divider
             { name: 'divider_counter', dim: [20, 0.2, 1], pos: [0, 3.1, 2], color: 0x666666, collider: false },
 
-            // Target Platform (where the blue cube will be)
+            // Target Platform (where the ball will be)
             { name: 'target_platform', dim: [4, 0.3, 4], pos: [0, 0.15, -8], color: 0x222288, collider: true },
 
             // Lane Markers (visual guides)
-            { name: 'lane_marker_1', dim: [0.1, 0.05, 10], pos: [-5, 0.15, -5], color: 0xFFFF00, collider: false },
-            { name: 'lane_marker_2', dim: [0.1, 0.05, 10], pos: [5, 0.15, -5], color: 0xFFFF00, collider: false },
+            { name: 'lane_marker_1', dim: [0.1, 0.05, 20], pos: [-5, 0.15, -10], color: 0xFFFF00, collider: false },
+            { name: 'lane_marker_2', dim: [0.1, 0.05, 20], pos: [5, 0.15, -10], color: 0xFFFF00, collider: false },
 
             // Ceiling lights (visual)
-            { name: 'ceiling_light_1', dim: [2, 0.2, 0.5], pos: [-5, 9, 0], color: 0xFFFFCC, collider: false },
-            { name: 'ceiling_light_2', dim: [2, 0.2, 0.5], pos: [5, 9, 0], color: 0xFFFFCC, collider: false },
-            { name: 'ceiling_light_3', dim: [2, 0.2, 0.5], pos: [0, 9, -8], color: 0xFFFFCC, collider: false }
+            { name: 'ceiling_light_1', dim: [2, 0.2, 0.5], pos: [-5, 14, 0], color: 0xFFFFCC, collider: false },
+            { name: 'ceiling_light_2', dim: [2, 0.2, 0.5], pos: [5, 14, 0], color: 0xFFFFCC, collider: false },
+            { name: 'ceiling_light_3', dim: [2, 0.2, 0.5], pos: [0, 14, -12], color: 0xFFFFCC, collider: false }
         ],
         hotspots: [],
         itemSpawns: [],

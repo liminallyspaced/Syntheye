@@ -41,9 +41,10 @@ export class CameraControl {
             return false;
         }
 
-        // Stop camera if gesture is for object manipulation
+        // (Aim assist camera lock removed - was causing freezes)
+
+        // Stop camera if gesture is for object manipulation (only THREE_FINGER blocks)
         if (currentGesture === GESTURE.THREE_FINGER ||
-            currentGesture === GESTURE.OPEN_HAND ||
             currentGesture === GESTURE.TWO_FINGER) {
 
             if (this.isControlling) {
@@ -55,27 +56,48 @@ export class CameraControl {
             return false;
         }
 
-        // Add cooldown when transitioning from grab/throw to pinch
-        const wasGrabbingOrThrowing = this.previousGesture === GESTURE.THREE_FINGER ||
-            this.previousGesture === GESTURE.OPEN_HAND;
+        // No cooldown needed between gestures for camera control
+        // Both PINCH and OPEN_HAND should smoothly control camera
 
-        if (wasGrabbingOrThrowing && currentGesture === GESTURE.PINCH) {
+        // Handle PINCH or OPEN_HAND for camera control
+        // BUT: if switching from OPEN_HAND to PINCH, add delay before PINCH affects camera
+        const switchingFromOpenHandToPinch = this.previousGesture === GESTURE.OPEN_HAND && currentGesture === GESTURE.PINCH;
+
+        if (switchingFromOpenHandToPinch) {
+            // Set a short cooldown so PINCH doesn't immediately move camera
+            this.pinchCooldownUntil = now + 300;
             this.isControlling = false;
-            this.framesSinceStart = 0;
             this.previousGesture = currentGesture;
-            this.cooldownUntil = now + 500;
+            return false; // Don't control camera, but levitation can still grab
+        }
+
+        // Skip camera control during pinch cooldown
+        if (currentGesture === GESTURE.PINCH && this.pinchCooldownUntil && now < this.pinchCooldownUntil) {
+            this.previousGesture = currentGesture;
             return false;
         }
 
-        // Handle PINCH gesture
-        if (currentGesture === GESTURE.PINCH && landmarks) {
+        // PINCH and OPEN_HAND control camera
+        if ((currentGesture === GESTURE.PINCH || currentGesture === GESTURE.OPEN_HAND) && landmarks) {
             const handX = landmarks[8].x;
             const handY = landmarks[8].y;
 
-            // Start tracking if not already
-            if (!this.isControlling) {
-                this.isControlling = true;
-                this.framesSinceStart = 0;
+            // DETECT GESTURE CHANGE - reset baseline to prevent jump
+            const gestureChanged = this.previousGesture !== currentGesture;
+
+            // Start tracking if not already OR if gesture changed
+            if (!this.isControlling || gestureChanged) {
+                if (gestureChanged && this.isControlling) {
+                    // Gesture changed while controlling - reset to current position
+                    this.handStartX = handX;
+                    this.handStartY = handY;
+                    this.cameraStartYaw = this.camera.rotation.y;
+                    this.cameraStartPitch = this.camera.rotation.x;
+                    this.framesSinceStart = 5; // Skip stabilization, keep smooth
+                } else {
+                    this.isControlling = true;
+                    this.framesSinceStart = 0;
+                }
             }
 
             this.framesSinceStart++;

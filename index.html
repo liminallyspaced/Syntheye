@@ -342,6 +342,566 @@
         }
     </script>
 
+    <!-- MODE INDICATOR - Shows current control mode (Left Ctrl to toggle) - TOP LEFT (hidden by default) -->
+    <div id="mode-indicator" style="
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 99999;
+        padding: 12px 20px;
+        background: rgba(0, 0, 0, 0.7);
+        border: 2px solid #00ffff;
+        border-radius: 8px;
+        font-family: 'Press Start 2P', monospace;
+        font-size: 10px;
+        color: #00ffff;
+        text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        pointer-events: none;
+        display: none;
+    ">
+        <div style="color: #888; font-size: 8px; margin-bottom: 4px;">CTRL TO SWITCH</div>
+        <div id="mode-text">MODE A: LEVITATE</div>
+    </div>
+
+    <!-- Reset Buttons - Bottom Left (Test Level Only) -->
+    <div id="reset-buttons" style="
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        z-index: 99999;
+        display: none;
+        gap: 8px;
+    ">
+        <button id="btn-reset-items" style="
+            padding: 8px 16px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid #ff0;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 10px;
+            color: #ff0;
+            cursor: pointer;
+        ">Reset Items</button>
+        <button id="btn-reset-camera" style="
+            padding: 8px 16px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid #0ff;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 10px;
+            color: #0ff;
+            cursor: pointer;
+        ">Reset Camera</button>
+    </div>
+
+    <script>
+        // Show test level UI when in testing mode
+        function showTestLevelUI() {
+            const modeIndicator = document.getElementById('mode-indicator');
+            const resetButtons = document.getElementById('reset-buttons');
+            if (modeIndicator) modeIndicator.style.display = 'block';
+            if (resetButtons) resetButtons.style.display = 'flex';
+        }
+
+        // Hide test level UI when leaving testing mode
+        function hideTestLevelUI() {
+            const modeIndicator = document.getElementById('mode-indicator');
+            const crosshair = document.getElementById('crosshair');
+            const levitationDebug = document.getElementById('levitation-debug');
+            const resetButtons = document.getElementById('reset-buttons');
+
+            if (modeIndicator) modeIndicator.style.display = 'none';
+            if (crosshair) crosshair.classList.add('hidden');
+            if (levitationDebug) levitationDebug.style.display = 'none';
+            if (resetButtons) resetButtons.style.display = 'none';
+        }
+
+        // Reset button event handlers
+        document.getElementById('btn-reset-items')?.addEventListener('click', () => {
+            if (window.levitationCube) {
+                window.levitationCube.position.set(0, 2, -8);
+                window.levitationCube.material.color.setHex(0x0000FF);
+                if (window.gamePhysics) {
+                    window.gamePhysics.resetVelocity();
+                    window.gamePhysics.setEnabled(true);
+                }
+                console.log("Items Reset!");
+            }
+        });
+
+        document.getElementById('btn-reset-camera')?.addEventListener('click', () => {
+            if (window.gameCamera) {
+                window.gameCamera.position.set(0, 3, 8);
+                window.gameCamera.rotation.set(0, 0, 0);
+                console.log("Camera Reset!");
+            }
+        });
+
+        // Expose to window for main.js to call
+        window.showTestLevelUI = showTestLevelUI;
+        window.hideTestLevelUI = hideTestLevelUI;
+    </script>
+
+    <!-- LEVITATION DEBUG PANEL - Toggle with * key -->
+    <div id="levitation-debug" style="
+        position: fixed;
+        top: 60px;
+        left: 20px;
+        z-index: 99998;
+        padding: 15px;
+        background: rgba(0, 0, 0, 0.9);
+        border: 2px solid #ff0;
+        border-radius: 8px;
+        font-family: monospace;
+        font-size: 11px;
+        color: #fff;
+        width: 280px;
+        display: none;
+    ">
+        <div style="color: #ff0; font-weight: bold; margin-bottom: 10px; font-size: 12px;">⚙️ LEVITATION DEBUG (* to
+            toggle)</div>
+
+        <div class="debug-slider" style="margin-bottom: 8px;">
+            <label>Push/Pull Strength: <span id="val-pushPull">80</span></label>
+            <input type="range" id="slider-pushPull" min="20" max="200" value="80" style="width: 100%;">
+        </div>
+
+        <div class="debug-slider" style="margin-bottom: 8px;">
+            <label>Velocity Multiplier: <span id="val-velocity">400</span></label>
+            <input type="range" id="slider-velocity" min="100" max="800" value="400" style="width: 100%;">
+        </div>
+
+        <div class="debug-slider" style="margin-bottom: 8px;">
+            <label>XY Movement Scale: <span id="val-xyMove">12</span></label>
+            <input type="range" id="slider-xyMove" min="5" max="30" value="12" style="width: 100%;">
+        </div>
+
+        <div class="debug-slider" style="margin-bottom: 8px;">
+            <label>Throw Speed Max: <span id="val-throwMax">100</span></label>
+            <input type="range" id="slider-throwMax" min="50" max="200" value="100" style="width: 100%;">
+        </div>
+
+        <div class="debug-slider" style="margin-bottom: 8px;">
+            <label>Min Grab Distance: <span id="val-minDist">1.5</span></label>
+            <input type="range" id="slider-minDist" min="0.5" max="5" value="1.5" step="0.5" style="width: 100%;">
+        </div>
+
+        <div class="debug-slider" style="margin-bottom: 8px;">
+            <label>Max Grab Distance: <span id="val-maxDist">30</span></label>
+            <input type="range" id="slider-maxDist" min="10" max="50" value="30" style="width: 100%;">
+        </div>
+
+        <div class="debug-slider" style="margin-bottom: 8px;">
+            <label>Gravity: <span id="val-gravity">-20</span></label>
+            <input type="range" id="slider-gravity" min="-40" max="-5" value="-20" style="width: 100%;">
+        </div>
+
+        <div class="debug-slider" style="margin-bottom: 12px;">
+            <label>Throw Flick Threshold: <span id="val-flick">0.05</span></label>
+            <input type="range" id="slider-flick" min="0.02" max="0.15" value="0.05" step="0.01" style="width: 100%;">
+        </div>
+
+        <div class="debug-slider" style="margin-bottom: 12px; background: #222; padding: 8px; border-radius: 4px;">
+            <label style="color: #f80;">☝️ ONE_FINGER Threshold: <span id="val-oneFinger">2.2</span>x</label>
+            <input type="range" id="slider-oneFinger" min="1.0" max="3.0" value="2.2" step="0.1" style="width: 100%;">
+            <div style="color: #888; font-size: 9px; margin-top: 3px;">Higher = pointer must be more extended</div>
+        </div>
+
+        <div class="debug-slider" style="margin-bottom: 12px; background: #223; padding: 8px; border-radius: 4px;">
+            <label style="color: #0af;">⬆️ Flick Y Threshold: <span id="val-flickY">0.06</span></label>
+            <input type="range" id="slider-flickY" min="0.02" max="0.15" value="0.06" step="0.01" style="width: 100%;">
+            <div style="color: #888; font-size: 9px; margin-top: 3px;">Upward swipe velocity to trigger throw</div>
+        </div>
+
+        <div style="border-top: 1px solid #666; padding-top: 10px; margin-top: 10px;">
+            <div style="color: #0ff; font-weight: bold; margin-bottom: 8px;">🤚 GESTURE ASSIGNMENTS</div>
+
+            <div style="margin-bottom: 6px;">
+                <label style="display: inline-block; width: 80px;">Grab:</label>
+                <select id="gesture-grab" style="background: #333; color: #fff; border: 1px solid #666; padding: 2px;">
+                    <option value="PINCH" selected>PINCH</option>
+                    <option value="OPEN_HAND">OPEN_HAND</option>
+                    <option value="THREE_FINGER">THREE_FINGER</option>
+                    <option value="TWO_FINGER">TWO_FINGER</option>
+                    <option value="ONE_FINGER">ONE_FINGER</option>
+                    <option value="CLOSED_FIST">CLOSED_FIST</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom: 6px;">
+                <label style="display: inline-block; width: 80px;">Drop:</label>
+                <select id="gesture-drop" style="background: #333; color: #fff; border: 1px solid #666; padding: 2px;">
+                    <option value="CLOSED_FIST" selected>CLOSED_FIST</option>
+                    <option value="ONE_FINGER">ONE_FINGER</option>
+                    <option value="OPEN_HAND">OPEN_HAND</option>
+                    <option value="THREE_FINGER">THREE_FINGER</option>
+                    <option value="TWO_FINGER">TWO_FINGER</option>
+                    <option value="PINCH">PINCH</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom: 6px;">
+                <label style="display: inline-block; width: 80px;">Move:</label>
+                <select id="gesture-move" style="background: #333; color: #fff; border: 1px solid #666; padding: 2px;">
+                    <option value="OPEN_HAND" selected>OPEN_HAND</option>
+                    <option value="THREE_FINGER">THREE_FINGER</option>
+                    <option value="TWO_FINGER">TWO_FINGER</option>
+                    <option value="PINCH">PINCH</option>
+                    <option value="CLOSED_FIST">CLOSED_FIST</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom: 6px;">
+                <label style="display: inline-block; width: 80px;">Freeze:</label>
+                <select id="gesture-freeze"
+                    style="background: #333; color: #fff; border: 1px solid #666; padding: 2px;">
+                    <option value="PINCH" selected>PINCH</option>
+                    <option value="OPEN_HAND">OPEN_HAND</option>
+                    <option value="THREE_FINGER">THREE_FINGER</option>
+                    <option value="TWO_FINGER">TWO_FINGER</option>
+                    <option value="CLOSED_FIST">CLOSED_FIST</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom: 6px;">
+                <label style="display: inline-block; width: 80px;">Camera:</label>
+                <select id="gesture-camera"
+                    style="background: #333; color: #fff; border: 1px solid #666; padding: 2px;">
+                    <option value="PINCH" selected>PINCH</option>
+                    <option value="OPEN_HAND">OPEN_HAND</option>
+                    <option value="THREE_FINGER">THREE_FINGER</option>
+                    <option value="TWO_FINGER">TWO_FINGER</option>
+                    <option value="CLOSED_FIST">CLOSED_FIST</option>
+                </select>
+            </div>
+
+            <div style="color: #888; font-size: 9px; margin-top: 5px;">Current gesture: <span
+                    id="current-gesture-display" style="color: #0f0;">NONE</span></div>
+        </div>
+
+        <div style="border-top: 1px solid #666; padding-top: 10px; margin-top: 10px;">
+            <div style="color: #f0f; font-weight: bold; margin-bottom: 8px;">💾 PRESETS</div>
+
+            <div style="display: flex; gap: 5px; margin-bottom: 8px;">
+                <select id="preset-selector"
+                    style="flex: 1; background: #333; color: #fff; border: 1px solid #666; padding: 4px;">
+                    <option value="">-- Select Preset --</option>
+                </select>
+            </div>
+
+            <div style="display: flex; gap: 5px;">
+                <button id="preset-save-btn"
+                    style="flex: 1; padding: 5px; background: #0a0; color: #fff; border: none; cursor: pointer; font-size: 10px;">💾
+                    SAVE</button>
+                <button id="preset-load-btn"
+                    style="flex: 1; padding: 5px; background: #06f; color: #fff; border: none; cursor: pointer; font-size: 10px;">📂
+                    LOAD</button>
+                <button id="preset-delete-btn"
+                    style="flex: 1; padding: 5px; background: #a00; color: #fff; border: none; cursor: pointer; font-size: 10px;">🗑️
+                    DEL</button>
+            </div>
+
+            <div id="preset-status" style="color: #0f0; margin-top: 5px; font-size: 9px; text-align: center;"></div>
+        </div>
+
+        <div style="display: flex; gap: 5px; margin-top: 10px;">
+            <button id="reset-camera-btn" title="Reset Camera Rotation" style="
+                flex: 1;
+                padding: 8px;
+                background: #444;
+                color: #fff;
+                border: 1px solid #666;
+                cursor: pointer;
+                font-size: 14px;
+            ">🎥</button>
+            <button id="reset-cube-btn" title="Reset Cube Position" style="
+                flex: 1;
+                padding: 8px;
+                background: #444;
+                color: #fff;
+                border: 1px solid #666;
+                cursor: pointer;
+                font-size: 14px;
+            ">📦</button>
+        </div>
+
+        <button id="copy-settings-btn" style="
+            width: 100%;
+            padding: 8px;
+            background: #ff0;
+            color: #000;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            font-family: monospace;
+            margin-top: 10px;
+        ">📋 COPY SETTINGS</button>
+
+        <div id="settings-status" style="color: #0f0; margin-top: 5px; font-size: 10px; text-align: center;"></div>
+    </div>
+
+    <script>
+        // Debug panel toggle with * key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === '*') {
+                const panel = document.getElementById('levitation-debug');
+                panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+            }
+        });
+
+        // Store settings globally for LevitationSystem to use
+        window.levitationSettings = {
+            pushPullStrength: 150,
+            velocityMultiplier: 400,
+            xyMoveScale: 12,
+            throwSpeedMax: 100,
+            minGrabDistance: 1.5,
+            maxGrabDistance: 30,
+            gravity: -20,
+            throwFlickThreshold: 0.05,
+            // Gesture assignments
+            gestureGrab: 'PINCH',
+            gestureDrop: 'CLOSED_FIST',
+            gestureMove: 'OPEN_HAND',
+            gestureFreeze: 'NONE',
+            gestureCamera: 'OPEN_HAND'
+        };
+
+        // Setup slider listeners
+        function setupSlider(id, settingKey, isFloat = false) {
+            const slider = document.getElementById('slider-' + id);
+            const val = document.getElementById('val-' + id);
+            if (slider && val) {
+                slider.addEventListener('input', () => {
+                    const value = isFloat ? parseFloat(slider.value) : parseInt(slider.value);
+                    val.textContent = value;
+                    window.levitationSettings[settingKey] = value;
+                });
+            }
+        }
+
+        setupSlider('pushPull', 'pushPullStrength');
+        setupSlider('velocity', 'velocityMultiplier');
+        setupSlider('xyMove', 'xyMoveScale');
+        setupSlider('throwMax', 'throwSpeedMax');
+        setupSlider('minDist', 'minGrabDistance', true);
+        setupSlider('maxDist', 'maxGrabDistance');
+        setupSlider('gravity', 'gravity');
+        setupSlider('flick', 'throwFlickThreshold', true);
+        setupSlider('oneFinger', 'oneFingerThreshold', true);
+        setupSlider('flickY', 'flickYThreshold', true);
+
+        // Set defaults for special thresholds
+        window.levitationSettings.oneFingerThreshold = 2.2;
+        window.levitationSettings.flickYThreshold = 0.06;
+
+        // Setup gesture dropdown listeners
+        function setupGestureDropdown(id, settingKey) {
+            const select = document.getElementById('gesture-' + id);
+            if (select) {
+                select.addEventListener('change', () => {
+                    window.levitationSettings[settingKey] = select.value;
+                    console.log(`Gesture ${id} set to: ${select.value}`);
+                });
+            }
+        }
+
+        setupGestureDropdown('grab', 'gestureGrab');
+        setupGestureDropdown('drop', 'gestureDrop');
+        setupGestureDropdown('move', 'gestureMove');
+        setupGestureDropdown('freeze', 'gestureFreeze');
+        setupGestureDropdown('camera', 'gestureCamera');
+
+        // Copy settings button
+        document.getElementById('copy-settings-btn')?.addEventListener('click', () => {
+            const settings = window.levitationSettings;
+            const text = `LEVITATION SETTINGS:
+pushPullStrength: ${settings.pushPullStrength}
+velocityMultiplier: ${settings.velocityMultiplier}
+xyMoveScale: ${settings.xyMoveScale}
+throwSpeedMax: ${settings.throwSpeedMax}
+minGrabDistance: ${settings.minGrabDistance}
+maxGrabDistance: ${settings.maxGrabDistance}
+gravity: ${settings.gravity}
+throwFlickThreshold: ${settings.throwFlickThreshold}
+
+GESTURE ASSIGNMENTS:
+gestureGrab: ${settings.gestureGrab}
+gestureDrop: ${settings.gestureDrop}
+gestureMove: ${settings.gestureMove}
+gestureFreeze: ${settings.gestureFreeze}
+gestureCamera: ${settings.gestureCamera}`;
+
+            navigator.clipboard.writeText(text).then(() => {
+                document.getElementById('settings-status').textContent = '✓ Copied to clipboard!';
+                setTimeout(() => {
+                    document.getElementById('settings-status').textContent = '';
+                }, 2000);
+            });
+        });
+
+        // === PRESET SYSTEM ===
+        const PRESET_STORAGE_KEY = 'levitationPresets';
+
+        // Load presets from localStorage
+        function getPresets() {
+            try {
+                return JSON.parse(localStorage.getItem(PRESET_STORAGE_KEY)) || {};
+            } catch (e) {
+                return {};
+            }
+        }
+
+        // Save presets to localStorage
+        function savePresetsToStorage(presets) {
+            localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(presets));
+        }
+
+        // Populate preset dropdown
+        function populatePresetDropdown() {
+            const selector = document.getElementById('preset-selector');
+            if (!selector) return;
+
+            const presets = getPresets();
+            selector.innerHTML = '<option value="">-- Select Preset --</option>';
+
+            Object.keys(presets).forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                selector.appendChild(option);
+            });
+        }
+
+        // Apply settings to UI sliders and dropdowns
+        function applySettingsToUI(settings) {
+            // Update sliders
+            const sliderMappings = {
+                'pushPull': 'pushPullStrength',
+                'velocity': 'velocityMultiplier',
+                'xyMove': 'xyMoveScale',
+                'throwMax': 'throwSpeedMax',
+                'minDist': 'minGrabDistance',
+                'maxDist': 'maxGrabDistance',
+                'gravity': 'gravity',
+                'flick': 'throwFlickThreshold'
+            };
+
+            Object.entries(sliderMappings).forEach(([sliderId, settingKey]) => {
+                const slider = document.getElementById('slider-' + sliderId);
+                const val = document.getElementById('val-' + sliderId);
+                if (slider && settings[settingKey] !== undefined) {
+                    slider.value = settings[settingKey];
+                    if (val) val.textContent = settings[settingKey];
+                }
+            });
+
+            // Update gesture dropdowns
+            const gestureMappings = ['grab', 'drop', 'move', 'freeze', 'camera'];
+            gestureMappings.forEach(id => {
+                const select = document.getElementById('gesture-' + id);
+                const settingKey = 'gesture' + id.charAt(0).toUpperCase() + id.slice(1);
+                if (select && settings[settingKey]) {
+                    select.value = settings[settingKey];
+                }
+            });
+
+            // Update window.levitationSettings
+            Object.assign(window.levitationSettings, settings);
+        }
+
+        // Save preset button
+        document.getElementById('preset-save-btn')?.addEventListener('click', () => {
+            const name = prompt('Enter preset name:');
+            if (!name || name.trim() === '') return;
+
+            const presets = getPresets();
+            presets[name.trim()] = { ...window.levitationSettings };
+            savePresetsToStorage(presets);
+            populatePresetDropdown();
+
+            document.getElementById('preset-status').textContent = `✓ Saved "${name.trim()}"`;
+            setTimeout(() => {
+                document.getElementById('preset-status').textContent = '';
+            }, 2000);
+        });
+
+        // Load preset button
+        document.getElementById('preset-load-btn')?.addEventListener('click', () => {
+            const selector = document.getElementById('preset-selector');
+            const name = selector?.value;
+
+            if (!name) {
+                document.getElementById('preset-status').textContent = '⚠ Select a preset first';
+                setTimeout(() => {
+                    document.getElementById('preset-status').textContent = '';
+                }, 2000);
+                return;
+            }
+
+            const presets = getPresets();
+            if (presets[name]) {
+                applySettingsToUI(presets[name]);
+                document.getElementById('preset-status').textContent = `✓ Loaded "${name}"`;
+                setTimeout(() => {
+                    document.getElementById('preset-status').textContent = '';
+                }, 2000);
+            }
+        });
+
+        // Delete preset button
+        document.getElementById('preset-delete-btn')?.addEventListener('click', () => {
+            const selector = document.getElementById('preset-selector');
+            const name = selector?.value;
+
+            if (!name) {
+                document.getElementById('preset-status').textContent = '⚠ Select a preset first';
+                setTimeout(() => {
+                    document.getElementById('preset-status').textContent = '';
+                }, 2000);
+                return;
+            }
+
+            if (!confirm(`Delete preset "${name}"?`)) return;
+
+            const presets = getPresets();
+            delete presets[name];
+            savePresetsToStorage(presets);
+            populatePresetDropdown();
+
+            document.getElementById('preset-status').textContent = `✓ Deleted "${name}"`;
+            setTimeout(() => {
+                document.getElementById('preset-status').textContent = '';
+            }, 2000);
+        });
+
+        // Initialize preset dropdown on load
+        populatePresetDropdown();
+
+        // Reset Buttons
+        document.getElementById('reset-camera-btn')?.addEventListener('click', () => {
+            if (window.gameCamera) {
+                window.gameCamera.rotation.set(0, 0, 0);
+                document.getElementById('settings-status').textContent = '✓ Camera reset';
+                setTimeout(() => document.getElementById('settings-status').textContent = '', 1500);
+            }
+        });
+
+        document.getElementById('reset-cube-btn')?.addEventListener('click', () => {
+            if (window.targetCube) {
+                window.targetCube.position.set(0, 1, 0);
+                window.targetCube.rotation.set(0, 0, 0);
+                if (window.gamePhysics) {
+                    window.gamePhysics.setEnabled(false);
+                    window.gamePhysics.velocity.set(0, 0, 0);
+                }
+                document.getElementById('settings-status').textContent = '✓ Cube reset';
+                setTimeout(() => document.getElementById('settings-status').textContent = '', 1500);
+            }
+        });
+    </script>
+
+
     <!-- Transition Overlay (Used for Fades and Door Animations) -->
     <div id="transition-overlay" class="hidden flex-col justify-center items-center">
         <p id="transition-text" class="text-xl text-white hidden">LOADING...</p>

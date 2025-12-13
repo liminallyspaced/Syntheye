@@ -160,4 +160,22 @@ export class HandTracker {
 
         this.canvasCtx.restore();
     }
+
+    /**
+     * Hide all hand tracker UI elements (for when leaving test room)
+     */
+    hideUI() {
+        if (this.canvasElement) this.canvasElement.style.display = 'none';
+        if (this.startButton) this.startButton.style.display = 'none';
+    }
+
+    /**
+     * Show hand tracker UI elements (for when entering test room)
+     */
+    showUI() {
+        if (this.startButton && !this.isInitialized) {
+            this.startButton.style.display = 'block';
+        }
+        // Canvas only shows when debug is toggled on
+    }
 }

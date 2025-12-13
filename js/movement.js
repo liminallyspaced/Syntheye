@@ -56,7 +56,18 @@ export function checkCollision(nextX, nextZ) {
     const playerMinZ = nextZ - 0.5;
     const playerMaxZ = nextZ + 0.5;
 
+    // Player Y height range (feet to head) - feet slightly above floor
+    const playerMinY = 0.2;
+    const playerMaxY = 2;
+
     for (const collider of collidableMeshes) {
+        // Skip colliders that are completely below player feet or above player head
+        const cMinY = collider.pos.y - collider.dim.y / 2;
+        const cMaxY = collider.pos.y + collider.dim.y / 2;
+        if (cMaxY < playerMinY || cMinY > playerMaxY) {
+            continue; // Collider is floor or ceiling, skip for player
+        }
+
         const cMinX = collider.pos.x - collider.dim.x / 2;
         const cMaxX = collider.pos.x + collider.dim.x / 2;
         const cMinZ = collider.pos.z - collider.dim.z / 2;

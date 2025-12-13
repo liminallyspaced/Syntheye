@@ -67,19 +67,39 @@ export function initThree() {
     const ambientLight = new THREE.AmbientLight(0x444466, 1.5);
     scene.add(ambientLight);
 
-    // Moonlight for shadows and atmosphere
-    const moonLight = new THREE.DirectionalLight(0xaabbdd, 1.0);
-    moonLight.position.set(-5, 15, -5);
-    moonLight.castShadow = true;
-    moonLight.shadow.mapSize.width = 1024;
-    moonLight.shadow.mapSize.height = 1024;
-    moonLight.shadow.camera.near = 0.5;
-    moonLight.shadow.camera.far = 50;
-    moonLight.shadow.camera.left = -20;
-    moonLight.shadow.camera.right = 20;
-    moonLight.shadow.camera.top = 20;
-    moonLight.shadow.camera.bottom = -20;
-    scene.add(moonLight);
+    // Point lights at ceiling positions for realistic lighting
+    const ceilingLightPositions = [
+        { x: -5, y: 13, z: 0 },
+        { x: 5, y: 13, z: 0 },
+        { x: 0, y: 13, z: -12 },
+        { x: -5, y: 13, z: -12 },
+        { x: 5, y: 13, z: -12 }
+    ];
+
+    ceilingLightPositions.forEach((pos, i) => {
+        const pointLight = new THREE.PointLight(0xffffee, 1.0, 30);
+        pointLight.position.set(pos.x, pos.y, pos.z);
+        pointLight.castShadow = true;
+        pointLight.shadow.mapSize.width = 512;
+        pointLight.shadow.mapSize.height = 512;
+        pointLight.shadow.camera.near = 0.5;
+        pointLight.shadow.camera.far = 25;
+        scene.add(pointLight);
+    });
+
+    // One soft directional light for overall fill and shadows
+    const fillLight = new THREE.DirectionalLight(0x8899aa, 0.3);
+    fillLight.position.set(0, 20, 0);
+    fillLight.castShadow = true;
+    fillLight.shadow.mapSize.width = 2048;
+    fillLight.shadow.mapSize.height = 2048;
+    fillLight.shadow.camera.near = 0.5;
+    fillLight.shadow.camera.far = 60;
+    fillLight.shadow.camera.left = -30;
+    fillLight.shadow.camera.right = 30;
+    fillLight.shadow.camera.top = 30;
+    fillLight.shadow.camera.bottom = -30;
+    scene.add(fillLight);
 
     // NOTE: Eye-flashlight (cone light) is added in flashlight.js
     // It is the PRIMARY light source for the player
@@ -142,18 +162,10 @@ export function initThree() {
     scene.add(targetMarkerMesh);
 
     // =================================================================================
-    // LEVITATION TARGET CUBE (Blue Cube)
+    // LEVITATION TARGET BALL (Basketball) - ONLY FOR TEST RANGE
     // =================================================================================
-    const cubeGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-    const cubeMat = new THREE.MeshStandardMaterial({ color: 0x0000FF }); // Blue
-    const levitationCube = new THREE.Mesh(cubeGeo, cubeMat);
-    // Default position (will be moved by main.js if in testing mode)
-    levitationCube.position.set(0, 2, -8); // On target platform in test range
-    levitationCube.castShadow = true;
-    levitationCube.receiveShadow = true;
-    levitationCube.name = "LevitationCube"; // Tag it
-    scene.add(levitationCube);
-    window.levitationCube = levitationCube; // Expose globally for main.js to access
+    // NOTE: This is now created dynamically when entering ROOM_TESTRANGE
+    // See createTestLevelElements() function below
 
     // Lighting
     scene.add(new THREE.AmbientLight(0x404040, 3));
@@ -500,4 +512,53 @@ export function playOnceAnimation(name, duration = 0.1) {
 // Check if a one-shot animation is currently playing
 export function isActionAnimationPlaying() {
     return isPlayingOnce;
+}
+
+// =================================================================================
+// CREATE TEST LEVEL ELEMENTS (Basketball, Hoop, etc.)
+// =================================================================================
+// Call this only when entering ROOM_TESTRANGE. Creates the levitation target ball
+// and exposes it globally for hand tracking systems.
+// =================================================================================
+export function createTestLevelElements() {
+    // Only create if not already created
+    if (window.levitationCube) {
+        console.log('Test level elements already exist');
+        return window.levitationCube;
+    }
+
+    const ballRadius = 0.25;
+    const ballGeo = new THREE.SphereGeometry(ballRadius, 24, 24);
+    const ballMat = new THREE.MeshStandardMaterial({ color: 0xff6600 }); // Orange basketball
+    const levitationCube = new THREE.Mesh(ballGeo, ballMat);
+
+    // Position in the test range
+    levitationCube.position.set(0, 2, -12);
+    levitationCube.castShadow = true;
+    levitationCube.receiveShadow = true;
+    levitationCube.name = "LevitationBall";
+    scene.add(levitationCube);
+
+    // Expose globally for hand tracking systems
+    window.levitationCube = levitationCube;
+    window.ballRadius = ballRadius;
+
+    console.log('Test level elements created (LevitationBall)');
+    return levitationCube;
+}
+
+// =================================================================================
+// REMOVE TEST LEVEL ELEMENTS
+// =================================================================================
+// Call this when leaving ROOM_TESTRANGE to clean up test elements
+// =================================================================================
+export function removeTestLevelElements() {
+    if (window.levitationCube) {
+        scene.remove(window.levitationCube);
+        window.levitationCube.geometry.dispose();
+        window.levitationCube.material.dispose();
+        window.levitationCube = null;
+        window.ballRadius = null;
+        console.log('Test level elements removed');
+    }
 }

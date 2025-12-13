@@ -8,6 +8,7 @@ export const GESTURE = {
     PINCH: 'PINCH',                   // Camera Control (thumb + pointer touching)
     THREE_FINGER: 'THREE_FINGER',     // Pointer + Middle + Ring extended = Grab and move
     TWO_FINGER: 'TWO_FINGER',         // Pointer + Middle extended, Ring curled = Push/Pull
+    ONE_FINGER: 'ONE_FINGER',         // Only pointer extended = Drop
     OPEN_HAND: 'OPEN_HAND',           // Throw (with directional flick)
     CLOSED_FIST: 'CLOSED_FIST'        // Not used currently
 };
@@ -69,22 +70,28 @@ export class GestureRecognizer {
         let rawGesture = GESTURE.NONE;
 
         // Priority order:
-        // 1. Finger variants (2 or 3 fingers) - check BEFORE pinch to avoid conflicts
-        const fingerResult = this.isFingerVariant(landmarks);
-        if (fingerResult) {
-            rawGesture = fingerResult;
+        // 1. Check ONE_FINGER first (pointer up only) - to avoid PINCH confusion
+        if (this.isOneFinger(landmarks)) {
+            rawGesture = GESTURE.ONE_FINGER;
         }
-        // 2. PINCH (thumb + pointer close) - camera control
-        else if (this.isPinch(landmarks)) {
-            rawGesture = GESTURE.PINCH;
-        }
-        // 3. OPEN_HAND (all fingers extended) - for throw
-        else if (this.isOpenHand(landmarks)) {
-            rawGesture = GESTURE.OPEN_HAND;
-        }
-        // 4. CLOSED_FIST
-        else if (this.isClosedFist(landmarks)) {
-            rawGesture = GESTURE.CLOSED_FIST;
+        // 2. Finger variants (2 or 3 fingers)
+        else {
+            const fingerResult = this.isFingerVariant(landmarks);
+            if (fingerResult) {
+                rawGesture = fingerResult;
+            }
+            // 3. PINCH (thumb + pointer close) - camera control
+            else if (this.isPinch(landmarks)) {
+                rawGesture = GESTURE.PINCH;
+            }
+            // 4. OPEN_HAND (all fingers extended) - for throw
+            else if (this.isOpenHand(landmarks)) {
+                rawGesture = GESTURE.OPEN_HAND;
+            }
+            // 5. CLOSED_FIST
+            else if (this.isClosedFist(landmarks)) {
+                rawGesture = GESTURE.CLOSED_FIST;
+            }
         }
 
         // Gesture stabilization - require gesture to be held for multiple frames
@@ -118,7 +125,47 @@ export class GestureRecognizer {
         const thumbTip = landmarks[4];
         const indexTip = landmarks[8];
         const distance = this.getDistance(thumbTip, indexTip);
-        return distance < 0.10; // More forgiving threshold for easier detection
+        return distance < 0.05; // Lower threshold - easier to trigger pinch
+    }
+
+    isOneFinger(landmarks) {
+        // Only index finger extended, all others curled (including thumb tucked)
+        const wrist = landmarks[0];
+        const palm = landmarks[9]; // Middle of palm
+
+        const indexTipDist = this.getDistance(landmarks[8], wrist);
+        const indexPipDist = this.getDistance(landmarks[6], wrist);
+        const middleTipDist = this.getDistance(landmarks[12], wrist);
+        const middlePipDist = this.getDistance(landmarks[10], wrist);
+        const ringTipDist = this.getDistance(landmarks[16], wrist);
+        const ringPipDist = this.getDistance(landmarks[14], wrist);
+        const pinkyTipDist = this.getDistance(landmarks[20], wrist);
+        const pinkyPipDist = this.getDistance(landmarks[18], wrist);
+        const palmDist = this.getDistance(palm, wrist);
+
+        // Index must be significantly extended - threshold from debug panel
+        const threshold = window.levitationSettings?.oneFingerThreshold || 2.2;
+        const indexExtended = indexTipDist > indexPipDist * threshold;
+
+        // Index tip must be MUCH further than palm center (truly pointing out)
+        const indexFurtherThanPalm = indexTipDist > palmDist * 1.8;
+
+        // Index must be MUCH further than ALL other fingertips
+        const indexFurtherThanMiddle = indexTipDist > middleTipDist * 1.6;
+        const indexFurtherThanRing = indexTipDist > ringTipDist * 1.6;
+        const indexFurtherThanPinky = indexTipDist > pinkyTipDist * 1.6;
+
+        // Absolute check: index must be at least 0.15 further than middle
+        const indexMuchFurtherAbsolute = (indexTipDist - middleTipDist) > 0.08;
+
+        // Others must be clearly curled (tip closer than knuckle)
+        const middleCurled = middleTipDist < middlePipDist * 0.9;
+        const ringCurled = ringTipDist < ringPipDist * 0.9;
+        const pinkyCurled = pinkyTipDist < pinkyPipDist * 0.9;
+
+        return indexExtended && indexFurtherThanPalm && indexMuchFurtherAbsolute &&
+            indexFurtherThanMiddle && indexFurtherThanRing && indexFurtherThanPinky &&
+            middleCurled && ringCurled && pinkyCurled;
     }
 
     isFingerVariant(landmarks) {
@@ -143,6 +190,8 @@ export class GestureRecognizer {
         if (indexExtended && middleExtended && !ringExtended) {
             return GESTURE.TWO_FINGER;
         }
+
+        // NOTE: ONE_FINGER is handled by isOneFinger() with stricter checks
 
         return null;
     }
