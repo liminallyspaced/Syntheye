@@ -7,7 +7,7 @@
 
 import * as THREE from 'three';
 import { STATE } from './config.js';
-import { camera, playerMesh, targetMarkerMesh, playAnimation } from './three-init.js';
+import { camera, playerMesh, targetMarkerMesh, animationController } from './three-init.js';
 import { collidableMeshes } from './rooms.js';
 
 // =================================================================================
@@ -49,10 +49,10 @@ export function resetMovement() {
     STATE.moveDelayTimer = 0;
     STATE.active_target = null;
 
-    // Play idle animation
-    playAnimation('Idle_Breathing', 0.15) ||
-        playAnimation('idle_breathing', 0.15) ||
-        playAnimation('Idle', 0.15);
+    // Request idle animation via new controller
+    if (animationController) {
+        animationController.request('Idle_HM');
+    }
 }
 
 // =================================================================================
@@ -176,6 +176,7 @@ export function updatePlayerMovement() {
 
     // WASD/Arrow key movement (only if no click-to-move target)
     let turnDirection = 0;  // -1 = left, 0 = forward, 1 = right
+    let isTurningInPlace = false;  // True when pressing A/D without W/S
 
     if (!STATE.active_target && (controls.w || controls.s || controls.a || controls.d)) {
         targetMarkerMesh.visible = false;
@@ -189,7 +190,20 @@ export function updatePlayerMovement() {
         movementVector.x += strafeFactor * Math.sin(forwardAngle + Math.PI / 2);
         movementVector.y += strafeFactor * Math.cos(forwardAngle + Math.PI / 2);
 
-        if (movementVector.lengthSq() > 0) {
+        // Detect PURE turn-in-place: A or D pressed WITHOUT W or S
+        if ((controls.a || controls.d) && !controls.w && !controls.s) {
+            isTurningInPlace = true;
+            turnDirection = controls.a ? -1 : 1;  // A = left, D = right
+            wantsToMove = false;  // Don't translate, just rotate
+
+            // Still update rotation for visual feedback
+            if (movementVector.lengthSq() > 0) {
+                movementVector.normalize();
+                const newRotationY = Math.atan2(movementVector.x, movementVector.y);
+                previousRotationY = newRotationY;
+                playerMesh.rotation.y = newRotationY;
+            }
+        } else if (movementVector.lengthSq() > 0) {
             movementVector.normalize();
             desiredMoveX = movementVector.x;
             desiredMoveZ = movementVector.y;
@@ -197,7 +211,7 @@ export function updatePlayerMovement() {
 
             const newRotationY = Math.atan2(movementVector.x, movementVector.y);
 
-            // Detect turn direction from rotation change
+            // Detect turn direction from rotation change (while moving)
             let rotationDiff = newRotationY - previousRotationY;
             // Normalize rotation difference to -PI to PI
             while (rotationDiff > Math.PI) rotationDiff -= 2 * Math.PI;
@@ -226,13 +240,18 @@ export function updatePlayerMovement() {
             // Still in delay phase - accumulate time but don't move yet
             STATE.moveDelayTimer += 0.016; // ~60fps frame time
             // Pass actual turnDirection so turn animations trigger immediately
-            setMovingState(true, controls.shift, turnDirection);
+            setMovingState(true, controls.shift, turnDirection, false);
         } else {
             // Delay complete - accelerate towards max speed
             STATE.currentSpeed = Math.min(STATE.currentSpeed + acceleration, targetSpeed);
             // Also trigger animation here for turn direction
-            setMovingState(true, controls.shift, turnDirection);
+            setMovingState(true, controls.shift, turnDirection, false);
         }
+    } else if (isTurningInPlace) {
+        // Turn-in-place: not moving but rotating
+        STATE.moveDelayTimer = 0;
+        STATE.currentSpeed = Math.max(STATE.currentSpeed - STATE.deceleration, 0);
+        setMovingState(false, false, turnDirection, true);  // isTurningInPlace = true
     } else {
         // Reset delay timer and decelerate
         STATE.moveDelayTimer = 0;
@@ -286,59 +305,33 @@ export function updatePlayerMovement() {
 }
 
 // =================================================================================
-// ANIMATION STATE HELPER
+// ANIMATION STATE HELPER - Uses new AnimationController
 // =================================================================================
-// Handles smooth transitions between idle, walk, run, and turn animations
-// Uses 0.2 second crossfade for smooth transitions
+// Outputs movement intent to the AnimationController which handles priority/locks
 // @param moving - whether player is moving
 // @param running - whether shift is held (run mode)
 // @param turnDirection - -1 for left, 0 for forward, 1 for right
+// @param turningInPlace - explicit turn-in-place flag (A/D without W/S)
 // =================================================================================
-function setMovingState(moving, running = false, turnDirection = 0) {
+function setMovingState(moving, running = false, turnDirection = 0, turningInPlace = false) {
     const stateChanged = (moving !== isMoving) || (running !== isRunning) || (turnDirection !== lastTurnDirection);
 
-    if (stateChanged) {
+    if (stateChanged || turningInPlace) {
         isMoving = moving;
         isRunning = running;
         lastTurnDirection = turnDirection;
 
-        if (!moving) {
-            // Transition back to idle animation
-            playAnimation('Idle_Breathing', 0.2) ||
-                playAnimation('idle_breathing', 0.2) ||
-                playAnimation('Idle', 0.2) ||
-                playAnimation('idle', 0.2);
-        } else if (turnDirection === -1) {
-            // Turning left while moving
-            playAnimation('Turn_Left', 0.15) ||
-                playAnimation('turn_left', 0.15) ||
-                playAnimation('TurnLeft', 0.15) ||
-                // Fallback to walk
-                playAnimation('Walking', 0.15) ||
-                playAnimation('walking', 0.15);
-        } else if (turnDirection === 1) {
-            // Turning right while moving
-            playAnimation('Turn_Right', 0.15) ||
-                playAnimation('turn_right', 0.15) ||
-                playAnimation('TurnRight', 0.15) ||
-                // Fallback to walk
-                playAnimation('Walking', 0.15) ||
-                playAnimation('walking', 0.15);
-        } else if (running) {
-            // Running forward
-            playAnimation('Running', 0.2) ||
-                playAnimation('running', 0.2) ||
-                playAnimation('Run', 0.2) ||
-                playAnimation('run', 0.2) ||
-                // Fallback to walk if no run animation
-                playAnimation('Walking', 0.2) ||
-                playAnimation('walking', 0.2);
-        } else {
-            // Walking forward
-            playAnimation('Walking', 0.2) ||
-                playAnimation('walking', 0.2) ||
-                playAnimation('Walk', 0.2) ||
-                playAnimation('walk', 0.2);
+        // Build intent object for AnimationController
+        const intent = {
+            moveMagnitude: moving ? (running ? 1.0 : 0.5) : 0,
+            isRunning: running,
+            turnDirection: turnDirection,  // -1=left, 0=none, 1=right
+            isTurningInPlace: turningInPlace
+        };
+
+        // Let AnimationController handle animation selection with priority system
+        if (animationController) {
+            animationController.updateFromIntent(intent);
         }
     }
 }

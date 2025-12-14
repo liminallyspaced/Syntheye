@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { STATE } from './config.js';
+import { animationController } from './AnimationController.js';
 // NOTE: Flashlight is now self-managed in flashlight.js, no import needed here
 
 // =================================================================================
@@ -25,6 +26,9 @@ export let raycaster = null;
 export let mixer = null;
 export let animations = {};
 export let clock = new THREE.Clock();
+
+// Re-export animation controller for other modules
+export { animationController };
 
 // Head bone for flashlight attachment
 export let headBone = null;
@@ -289,13 +293,19 @@ function loadCharacterModel(gltf) {
 
         console.log('Animation aliases:', Object.keys(animations));
 
-        // Start idle animation immediately (looping)
+        // Start idle animation immediately (looping) - LEGACY
         if (animations['Idle']) {
             animations['Idle'].setLoop(THREE.LoopRepeat);
             animations['Idle'].play();
             currentAnimation = animations['Idle'];
-            console.log('Started idle animation');
+            console.log('Started idle animation (legacy)');
         }
+
+        // === NEW: Initialize AnimationController with canonical clips ===
+        console.log('=== ANIMATION CLIPS IN CHARACTER.GLB ===');
+        gltf.animations.forEach(clip => console.log(`  Clip: "${clip.name}"`));
+        console.log('==========================================');
+        animationController.init(mixer, gltf.animations);
     }
 
     console.log("Character loaded successfully!");

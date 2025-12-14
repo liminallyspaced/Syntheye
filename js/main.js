@@ -28,7 +28,8 @@ import {
     targetMarkerMesh,
     updateAnimations,
     playOnceAnimation,
-    createTestLevelElements
+    createTestLevelElements,
+    animationController
 } from './three-init.js';
 import { loadAllRooms, setRoom, spawnRoomItems } from './rooms.js';
 import { controls, updatePlayerMovement } from './movement.js';
@@ -276,9 +277,13 @@ document.addEventListener('keydown', (event) => {
                 handleEInteraction();
                 break;
             case ' ':
-                // Jump animation (spacebar)
+                // Jump animation (spacebar) - uses new AnimationController
                 event.preventDefault();
-                playOnceAnimation('Jump');
+                if (animationController) {
+                    animationController.triggerJump();
+                } else {
+                    playOnceAnimation('Jump'); // legacy fallback
+                }
                 break;
             case 'escape':
                 SoundManager.playBlip();

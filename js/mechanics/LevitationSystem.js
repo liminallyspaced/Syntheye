@@ -6,6 +6,7 @@
 
 import * as THREE from 'three';
 import { GESTURE } from '../hand-tracking/GestureRecognizer.js';
+import { animationController } from '../AnimationController.js';
 
 const STATE = {
     IDLE: 'IDLE',
@@ -263,6 +264,11 @@ export class LevitationSystem {
         this.velocityHistory = [];
         this.breakTimer = 0;
 
+        // === TRIGGER LEVITATION ANIMATION ===
+        if (animationController) {
+            animationController.enterLevitation();
+        }
+
         console.log(`Levitation: Object Grabbed at distance ${this.holdDistance.toFixed(1)}!`);
     }
 
@@ -284,6 +290,11 @@ export class LevitationSystem {
 
         // Cooldown to prevent instant re-grab (hysteresis)
         this.grabCooldown = 0.15; // 150ms
+
+        // === EXIT LEVITATION ANIMATION ===
+        if (animationController) {
+            animationController.exitLevitation();
+        }
 
         console.log("Levitation: Object Dropped!");
     }
@@ -497,6 +508,11 @@ export class LevitationSystem {
 
         // f) Set cooldown to prevent accidental re-grab
         this.grabCooldown = 0.3;
+
+        // === TRIGGER THROW ANIMATION ===
+        if (animationController) {
+            animationController.triggerThrow();
+        }
 
         // =====================================================
         // 2. COMPUTE THROW DIRECTION FROM RAW INPUT (not aim-assisted)
