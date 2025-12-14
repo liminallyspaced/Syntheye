@@ -94,6 +94,19 @@ export class LevitationSystem {
         this.handOffsetY = 0;
     }
 
+    /**
+     * Calculate hand size/spread for push-pull detection
+     * Measures distance from wrist to middle fingertip
+     */
+    calculateHandSize(landmarks) {
+        if (!landmarks || landmarks.length < 12) return 0;
+        const wrist = landmarks[0];
+        const midTip = landmarks[12];
+        const dx = midTip.x - wrist.x;
+        const dy = midTip.y - wrist.y;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
     update(currentGesture, landmarks, gestureRecognizer = null) {
         if (!this.targetObject) return;
 
@@ -224,11 +237,27 @@ export class LevitationSystem {
         this.targetHoldDistance = this.holdDistance;
         this.baseGrabDistance = this.holdDistance;
 
-        // Store initial hand for relative movement
+        // === FRESH GRAB ANCHORS ===
+        // Capture new anchors at grab moment - do NOT reuse camera mode anchors
         if (landmarks) {
+            const palmCenter = landmarks[9];
+
+            // Store grab anchor position (fresh, independent from camera)
+            this.grabAnchorHandXY = { x: palmCenter.x, y: palmCenter.y };
+            this.grabAnchorDepth = this.calculateHandSize(landmarks);
+            this.grabAnchorCameraYaw = this.camera.rotation.y;
+            this.grabAnchorCameraPitch = this.camera.rotation.x;
+
+            // Also set traditional references
+            this.initialHandX = palmCenter.x;
+            this.initialHandY = palmCenter.y;
             this.initialHandZ = landmarks[9].z;
             this.lastPushPullZ = landmarks[9].z;
         }
+
+        // Zero movement offsets - start fresh
+        this.handOffsetX = 0;
+        this.handOffsetY = 0;
 
         // Clear velocity history
         this.velocityHistory = [];

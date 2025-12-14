@@ -17,11 +17,16 @@ export const controls = {
     w: false,
     a: false,
     s: false,
-    d: false
+    d: false,
+    shift: false  // Hold shift to run
 };
 
 // Track if player is currently moving (for animation)
 let isMoving = false;
+let isRunning = false;  // Track running state for animation
+let lastTurnDirection = 0; // -1 = left, 0 = none, 1 = right
+let previousRotationY = 0; // Track rotation for turn detection
+
 
 // =================================================================================
 // RESET MOVEMENT STATE (call on room transitions)
@@ -32,9 +37,12 @@ export function resetMovement() {
     controls.a = false;
     controls.s = false;
     controls.d = false;
+    controls.shift = false;
 
     // Reset movement state
     isMoving = false;
+    isRunning = false;
+    lastTurnDirection = 0;
 
     // Reset velocity state in STATE object
     STATE.currentSpeed = 0;
@@ -167,6 +175,8 @@ export function updatePlayerMovement() {
     }
 
     // WASD/Arrow key movement (only if no click-to-move target)
+    let turnDirection = 0;  // -1 = left, 0 = forward, 1 = right
+
     if (!STATE.active_target && (controls.w || controls.s || controls.a || controls.d)) {
         targetMarkerMesh.visible = false;
         const forwardFactor = controls.w ? 1 : controls.s ? -1 : 0;
@@ -184,19 +194,44 @@ export function updatePlayerMovement() {
             desiredMoveX = movementVector.x;
             desiredMoveZ = movementVector.y;
             wantsToMove = true;
-            playerMesh.rotation.y = Math.atan2(movementVector.x, movementVector.y);
+
+            const newRotationY = Math.atan2(movementVector.x, movementVector.y);
+
+            // Detect turn direction from rotation change
+            let rotationDiff = newRotationY - previousRotationY;
+            // Normalize rotation difference to -PI to PI
+            while (rotationDiff > Math.PI) rotationDiff -= 2 * Math.PI;
+            while (rotationDiff < -Math.PI) rotationDiff += 2 * Math.PI;
+
+            // Threshold for significant turn (about 5 degrees)
+            const turnThreshold = 0.08;
+            if (rotationDiff > turnThreshold) {
+                turnDirection = 1;  // Turning right
+            } else if (rotationDiff < -turnThreshold) {
+                turnDirection = -1; // Turning left
+            }
+
+            previousRotationY = newRotationY;
+            playerMesh.rotation.y = newRotationY;
         }
     }
 
     // Handle movement delay (0.5s before character starts moving)
     if (wantsToMove) {
+        // Run speed is 2x walk speed
+        const targetSpeed = controls.shift ? STATE.speed * 2.0 : STATE.speed;
+        const acceleration = controls.shift ? STATE.acceleration * 1.5 : STATE.acceleration;
+
         if (STATE.moveDelayTimer < STATE.moveDelay) {
             // Still in delay phase - accumulate time but don't move yet
             STATE.moveDelayTimer += 0.016; // ~60fps frame time
-            setMovingState(true); // Start animation during delay
+            // Pass actual turnDirection so turn animations trigger immediately
+            setMovingState(true, controls.shift, turnDirection);
         } else {
             // Delay complete - accelerate towards max speed
-            STATE.currentSpeed = Math.min(STATE.currentSpeed + STATE.acceleration, STATE.speed);
+            STATE.currentSpeed = Math.min(STATE.currentSpeed + acceleration, targetSpeed);
+            // Also trigger animation here for turn direction
+            setMovingState(true, controls.shift, turnDirection);
         }
     } else {
         // Reset delay timer and decelerate
@@ -243,34 +278,67 @@ export function updatePlayerMovement() {
         }
 
         if (moved) {
-            setMovingState(true);
+            setMovingState(true, controls.shift, turnDirection);
         }
     } else {
-        setMovingState(false);
+        setMovingState(false, false, 0);
     }
 }
 
 // =================================================================================
 // ANIMATION STATE HELPER
 // =================================================================================
-// Handles smooth transitions between idle and walking animations
-// Uses 0.15 second crossfade for snappy transitions
+// Handles smooth transitions between idle, walk, run, and turn animations
+// Uses 0.2 second crossfade for smooth transitions
+// @param moving - whether player is moving
+// @param running - whether shift is held (run mode)
+// @param turnDirection - -1 for left, 0 for forward, 1 for right
 // =================================================================================
-function setMovingState(moving) {
-    if (moving !== isMoving) {
-        isMoving = moving;
+function setMovingState(moving, running = false, turnDirection = 0) {
+    const stateChanged = (moving !== isMoving) || (running !== isRunning) || (turnDirection !== lastTurnDirection);
 
-        if (moving) {
-            // Transition to walking animation with fast crossfade
-            playAnimation('walking', 0.15) ||
+    if (stateChanged) {
+        isMoving = moving;
+        isRunning = running;
+        lastTurnDirection = turnDirection;
+
+        if (!moving) {
+            // Transition back to idle animation
+            playAnimation('Idle_Breathing', 0.2) ||
+                playAnimation('idle_breathing', 0.2) ||
+                playAnimation('Idle', 0.2) ||
+                playAnimation('idle', 0.2);
+        } else if (turnDirection === -1) {
+            // Turning left while moving
+            playAnimation('Turn_Left', 0.15) ||
+                playAnimation('turn_left', 0.15) ||
+                playAnimation('TurnLeft', 0.15) ||
+                // Fallback to walk
                 playAnimation('Walking', 0.15) ||
-                playAnimation('Walk', 0.15);
+                playAnimation('walking', 0.15);
+        } else if (turnDirection === 1) {
+            // Turning right while moving
+            playAnimation('Turn_Right', 0.15) ||
+                playAnimation('turn_right', 0.15) ||
+                playAnimation('TurnRight', 0.15) ||
+                // Fallback to walk
+                playAnimation('Walking', 0.15) ||
+                playAnimation('walking', 0.15);
+        } else if (running) {
+            // Running forward
+            playAnimation('Running', 0.2) ||
+                playAnimation('running', 0.2) ||
+                playAnimation('Run', 0.2) ||
+                playAnimation('run', 0.2) ||
+                // Fallback to walk if no run animation
+                playAnimation('Walking', 0.2) ||
+                playAnimation('walking', 0.2);
         } else {
-            // Transition back to idle animation with fast crossfade
-            playAnimation('Idle_Breathing', 0.15) ||
-                playAnimation('idle_breathing', 0.15) ||
-                playAnimation('Idle', 0.15) ||
-                playAnimation('idle', 0.15);
+            // Walking forward
+            playAnimation('Walking', 0.2) ||
+                playAnimation('walking', 0.2) ||
+                playAnimation('Walk', 0.2) ||
+                playAnimation('walk', 0.2);
         }
     }
 }

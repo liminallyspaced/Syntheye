@@ -261,6 +261,7 @@ document.addEventListener('keydown', (event) => {
             case 's': controls.s = true; break;
             case 'a': controls.a = true; break;
             case 'd': controls.d = true; break;
+            case 'shift': controls.shift = true; break;
             case 'arrowup': controls.w = true; break;
             case 'arrowdown': controls.s = true; break;
             case 'arrowleft': controls.a = true; break;
@@ -330,6 +331,7 @@ document.addEventListener('keyup', (event) => {
             case 's': controls.s = false; break;
             case 'a': controls.a = false; break;
             case 'd': controls.d = false; break;
+            case 'shift': controls.shift = false; break;
             case 'arrowup': controls.w = false; break;
             case 'arrowdown': controls.s = false; break;
             case 'arrowleft': controls.a = false; break;
@@ -685,6 +687,24 @@ function initHandTracking() {
                                         let previousGesture = GESTURE.NONE;
                                         let transitionCooldownFrames = 0;
 
+                                        // === CENTRALIZED GESTURE CHANGE CALLBACK ===
+                                        // Fires when stabilized gesture changes - coordinate handoffs
+                                        gestureRecognizer.onGestureChangeCallback = (prevGesture, nextGesture) => {
+                                            const palmXY = window.handTracker?.results?.multiHandLandmarks?.[0]?.[9];
+
+                                            // Exiting camera control mode
+                                            if (prevGesture === GESTURE.OPEN_HAND && nextGesture !== GESTURE.OPEN_HAND) {
+                                                cameraControl.resetHandAnchor(palmXY);
+                                            }
+
+                                            // Also reset on PINCH exit (camera was using pinch)
+                                            if (prevGesture === GESTURE.PINCH && nextGesture !== GESTURE.PINCH) {
+                                                cameraControl.resetHandAnchor(palmXY);
+                                            }
+
+                                            console.log(`Gesture: ${Object.keys(GESTURE).find(k => GESTURE[k] === prevGesture)} -> ${Object.keys(GESTURE).find(k => GESTURE[k] === nextGesture)}`);
+                                        };
+
                                         // === ATOMIC POWER TRANSITION FUNCTION ===
                                         function setActivePower(newMode) {
                                             const oldMode = currentMode;
@@ -832,7 +852,11 @@ function initHandTracking() {
                                                     !justChangedGesture;
 
                                                 if (shouldUpdateCamera) {
-                                                    const isHandControllingCamera = cameraControl.update(gesture, landmarks);
+                                                    // Determine active mode - LEVITATION if holding object, else CAMERA
+                                                    const isHoldingObject = levitationSystem.state === 'GRABBED';
+                                                    const activeMode = isHoldingObject ? 'LEVITATION' : 'CAMERA';
+
+                                                    const isHandControllingCamera = cameraControl.update(gesture, landmarks, activeMode);
                                                     window.HAND_CAMERA_CONTROL_ACTIVE = isHandControllingCamera;
                                                 } else {
                                                     // Only block camera during THREE_FINGER (object grab gesture)

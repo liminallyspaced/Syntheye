@@ -29,7 +29,15 @@ export class GestureRecognizer {
         // Gesture stabilization - prevent flickering during transitions
         this.lastRawGesture = GESTURE.NONE;
         this.gestureHoldCount = 0;
-        this.gestureStabilityThreshold = 2; // Reduced for faster response
+        this.gestureStabilityThreshold = 6; // Increased from 2 for smoother transitions
+
+        // Pinch hysteresis - tighter to enter, looser to exit
+        this.PINCH_IN_THRESHOLD = 0.04;   // Must be closer to START pinch
+        this.PINCH_OUT_THRESHOLD = 0.07;  // Can be further to MAINTAIN pinch
+        this.isPinching = false;           // Track pinch state
+
+        // Callback for gesture changes
+        this.onGestureChangeCallback = null;
     }
 
     recognize(landmarks) {
@@ -104,7 +112,14 @@ export class GestureRecognizer {
 
         // Only switch gesture if held for enough frames
         if (this.gestureHoldCount >= this.gestureStabilityThreshold) {
-            this.currentGesture = rawGesture;
+            const prevGesture = this.currentGesture;
+            if (rawGesture !== prevGesture) {
+                this.currentGesture = rawGesture;
+                // Fire callback on gesture change
+                if (this.onGestureChangeCallback) {
+                    this.onGestureChangeCallback(prevGesture, rawGesture);
+                }
+            }
         }
 
         return this.currentGesture;
@@ -125,7 +140,21 @@ export class GestureRecognizer {
         const thumbTip = landmarks[4];
         const indexTip = landmarks[8];
         const distance = this.getDistance(thumbTip, indexTip);
-        return distance < 0.05; // Lower threshold - easier to trigger pinch
+
+        // Hysteresis: tighter threshold to START pinch, looser to MAINTAIN
+        if (this.isPinching) {
+            // Currently pinching - use looser threshold to release
+            if (distance > this.PINCH_OUT_THRESHOLD) {
+                this.isPinching = false;
+            }
+        } else {
+            // Not pinching - use tighter threshold to begin
+            if (distance < this.PINCH_IN_THRESHOLD) {
+                this.isPinching = true;
+            }
+        }
+
+        return this.isPinching;
     }
 
     isOneFinger(landmarks) {
