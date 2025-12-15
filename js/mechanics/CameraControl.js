@@ -109,6 +109,20 @@ export class CameraControl {
         }
 
         // PINCH and OPEN_HAND control camera
+        // NEW RULE: PINCH only controls camera when holding an object
+        // This prevents camera flicks during OPEN_HAND -> PINCH transition for pickup
+        const isHoldingObject = window.levitationState?.isHolding || false;
+
+        if (currentGesture === GESTURE.PINCH && !isHoldingObject) {
+            // PINCH without holding object = blocked from camera control
+            // Reset state so next activation starts fresh
+            if (this.isControlling) {
+                this.resetHandAnchor(landmarks ? { x: landmarks[9].x, y: landmarks[9].y } : null);
+            }
+            this.previousGesture = currentGesture;
+            return false;
+        }
+
         if ((currentGesture === GESTURE.PINCH || currentGesture === GESTURE.OPEN_HAND) && landmarks) {
             const handX = landmarks[8].x;
             const handY = landmarks[8].y;

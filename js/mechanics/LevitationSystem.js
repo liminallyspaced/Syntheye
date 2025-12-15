@@ -24,6 +24,9 @@ export class LevitationSystem {
         this.raycaster = new THREE.Raycaster();
         this.state = STATE.IDLE;
 
+        // Global state for CameraControl to check
+        window.levitationState = { isHolding: false };
+
         // Visual indicator
         this.highlightMesh = this.createHighlight();
         this.targetObject.add(this.highlightMesh);
@@ -70,6 +73,10 @@ export class LevitationSystem {
 
         // Cooldown after throwing to prevent accidental re-grab
         this.grabCooldown = 0;
+
+        // Stabilization timer after grabbing (prevents ball push during animation)
+        this.grabStabilizationTimer = 0;
+        this.grabStabilizationDuration = 0.3;  // 300ms stabilization period
 
         // Aim assist now handled by centralized AimAssist.js module
     }
@@ -229,6 +236,9 @@ export class LevitationSystem {
         this.physics.setEnabled(true); // Keep physics enabled for wall collisions
         this.targetObject.material.color.setHex(0x00FFFF);
 
+        // Update global state for CameraControl
+        window.levitationState.isHolding = true;
+
         // Calculate actual distance to object
         const objectPos = this.targetObject.position.clone();
         const cameraPos = this.camera.position.clone();
@@ -264,6 +274,9 @@ export class LevitationSystem {
         this.velocityHistory = [];
         this.breakTimer = 0;
 
+        // Start stabilization period (reduced forces during animation)
+        this.grabStabilizationTimer = this.grabStabilizationDuration;
+
         // === TRIGGER LEVITATION ANIMATION ===
         if (animationController) {
             animationController.enterLevitation();
@@ -276,6 +289,9 @@ export class LevitationSystem {
         // === ATOMIC RELEASE ===
         this.state = STATE.IDLE;
         this.physics.setLevitating(false);
+
+        // Update global state for CameraControl
+        window.levitationState.isHolding = false;
 
         // Clear aim assist lock
         if (window.aimAssist) {
@@ -304,6 +320,17 @@ export class LevitationSystem {
      */
     updateHoldPhysics(landmarks) {
         if (!landmarks) return;
+
+        // === STABILIZATION PERIOD ===
+        // During stabilization after grab, keep ball in place without applying movement forces
+        if (this.grabStabilizationTimer > 0) {
+            this.grabStabilizationTimer -= 0.016;  // ~60fps
+
+            // Just hold the ball in place by zeroing velocity
+            // Don't calculate new target position from hand - it's not stable yet
+            this.physics.setVelocity(new THREE.Vector3(0, 0, 0));
+            return;  // Skip normal force calculations
+        }
 
         // Calculate target position from hand input
         this.calculateTargetPosition(landmarks);
@@ -494,6 +521,9 @@ export class LevitationSystem {
 
         // b) Disable levitation (no more stabilization forces)
         this.physics.setLevitating(false);
+
+        // Update global state for CameraControl
+        window.levitationState.isHolding = false;
 
         // c) Clear aim assist lock (runtime only, doesn't affect config)
         if (window.aimAssist) {
