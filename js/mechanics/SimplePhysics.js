@@ -98,26 +98,20 @@ export class SimplePhysics {
         this.forceAccumulator.set(0, 0, 0);
         this.torqueAccumulator.set(0, 0, 0);
 
-        // Floor collision - preserve tangential velocity
+        // Floor collision
         if (this.mesh.position.y < this.floorY) {
             this.mesh.position.y = this.floorY;
 
-            const minBounceSpeed = 1.0; // Below this, no bounce (prevents jitter)
-
-            if (Math.abs(this.velocity.y) > minBounceSpeed) {
-                // Bounce: reflect only normal component, keep tangential
+            if (Math.abs(this.velocity.y) > 0.5) {
                 this.velocity.y = -this.velocity.y * this.elasticity;
-                // Apply friction to tangential (but don't kill it)
-                this.velocity.x *= 0.95;
-                this.velocity.z *= 0.95;
+                this.velocity.x *= 0.8;
+                this.velocity.z *= 0.8;
                 this.isGround = false;
             } else {
-                // Too slow to bounce - just settle, but keep sliding
                 this.velocity.y = 0;
                 this.isGround = true;
-                // Light friction for sliding, not instant stop
-                this.velocity.x *= 0.98;
-                this.velocity.z *= 0.98;
+                this.velocity.x *= 0.9;
+                this.velocity.z *= 0.9;
             }
         } else {
             this.isGround = false;
@@ -256,12 +250,15 @@ export class SimplePhysics {
 
     /**
      * Log collision event to on-screen debug display
+     * PHASE 1 FIX: Only logs when ENABLE_COLLISION_DEBUG is true
      */
     logCollision(what, pos) {
-        const msg = `HIT ${what} @ pos(${this.mesh.position.x.toFixed(1)}, ${this.mesh.position.y.toFixed(1)}, ${this.mesh.position.z.toFixed(1)})`;
-        console.log(msg);
+        // PHASE 1 FIX: Skip all logging/DOM work unless explicitly enabled
+        if (!window.ENABLE_COLLISION_DEBUG) return;
 
-        // Add red impact marker at collision point
+        const msg = `HIT ${what} @ pos(${this.mesh.position.x.toFixed(1)}, ${this.mesh.position.y.toFixed(1)}, ${this.mesh.position.z.toFixed(1)})`;
+
+        // Add red impact marker at collision point (only if tracer enabled)
         this.addImpactMarker(this.mesh.position.clone());
 
         // Store in window for debug display
@@ -278,6 +275,9 @@ export class SimplePhysics {
     }
 
     updateDebugDisplay() {
+        // PHASE 1 FIX: Skip DOM work unless explicitly enabled
+        if (!window.ENABLE_COLLISION_DEBUG) return;
+
         let el = document.getElementById('collision-debug');
         if (!el) {
             el = document.createElement('div');

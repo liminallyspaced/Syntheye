@@ -244,26 +244,6 @@ function loadCharacterModel(gltf) {
             // Map run if present
             if (lowerName.includes('run')) {
                 animations['Run'] = action;
-                animations['Running'] = action;
-                animations['running'] = action;
-            }
-
-            // Map turn left animation
-            if (lowerName.includes('turn') && lowerName.includes('left')) {
-                animations['Turn_Left'] = action;
-                animations['turn_left'] = action;
-                animations['TurnLeft'] = action;
-                // Speed up turn animation to ~500ms
-                action.timeScale = 2.0;
-            }
-
-            // Map turn right animation
-            if (lowerName.includes('turn') && lowerName.includes('right')) {
-                animations['Turn_Right'] = action;
-                animations['turn_right'] = action;
-                animations['TurnRight'] = action;
-                // Speed up turn animation to ~500ms
-                action.timeScale = 2.0;
             }
 
             // Map jump animation
@@ -273,8 +253,6 @@ function loadCharacterModel(gltf) {
                 // Jump should play once, not loop
                 action.setLoop(THREE.LoopOnce);
                 action.clampWhenFinished = true;
-                // 50% faster animation
-                action.timeScale = 1.5;
             }
 
             // Map interact animation

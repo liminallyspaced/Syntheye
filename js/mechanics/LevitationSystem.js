@@ -10,7 +10,8 @@ import { GESTURE } from '../hand-tracking/GestureRecognizer.js';
 const STATE = {
     IDLE: 'IDLE',
     HOVERING: 'HOVERING',
-    GRABBED: 'GRABBED'
+    GRABBED: 'GRABBED',
+    THROWN: 'THROWN'  // Prevents instant re-grab after throw
 };
 
 export class LevitationSystem {
@@ -70,7 +71,35 @@ export class LevitationSystem {
         // Cooldown after throwing to prevent accidental re-grab
         this.grabCooldown = 0;
 
-        // Aim assist now handled by centralized AimAssist.js module
+        // === UX IMPROVEMENTS ===
+
+        // Hand-loss grace period (prevents instant drops)
+        this.handLostTimer = 0;
+        this.handLostGraceDuration = 0.2;  // 200ms
+        this.lastValidCameraForward = new THREE.Vector3(0, 0, -1);
+        this.lastValidCameraPosition = new THREE.Vector3();
+        this.lastValidHoldDistance = 8.0;
+
+        // Release hysteresis (requires stable release gesture)
+        this.releaseGestureHoldCount = 0;
+        this.releaseStabilityThreshold = 5;  // Frames required
+        this.lastReleaseGesture = null;
+
+        // HoldDistance rate limiting
+        this.maxHoldDistanceRate = 8;  // units/sec
+
+        // Dynamic damping based on hand stability
+        this.baseDampingD = 25;
+        this.stableDampingBonus = 5;
+        this.movingDampingReduction = 5;
+        this.handStabilityThreshold = 0.01;  // handSpeed below this = stable
+
+        // Aim assist (unused but preserved)
+        this.aimAssistRadius = 1.5;
+        this.aimAssistStrength = 0.03;
+        this.cameraLockTimer = 0;
+        this.cameraLockDuration = 1.0;
+        this.isAimAssisting = false;
     }
 
     createHighlight() {
@@ -95,27 +124,81 @@ export class LevitationSystem {
     }
 
     /**
-     * Calculate hand size/spread for push-pull detection
-     * Measures distance from wrist to middle fingertip
+     * Update last valid state for hand-loss grace period
+     * Call this every frame when hand is present
      */
-    calculateHandSize(landmarks) {
-        if (!landmarks || landmarks.length < 12) return 0;
-        const wrist = landmarks[0];
-        const midTip = landmarks[12];
-        const dx = midTip.x - wrist.x;
-        const dy = midTip.y - wrist.y;
-        return Math.sqrt(dx * dx + dy * dy);
+    updateLastValidState(camera) {
+        this.lastValidCameraPosition.copy(camera.position);
+        this.lastValidCameraForward.set(0, 0, -1).applyQuaternion(camera.quaternion);
+        this.lastValidHoldDistance = this.holdDistance;
     }
 
-    update(currentGesture, landmarks, gestureRecognizer = null) {
+    /**
+     * Check if release gesture is stable (hysteresis)
+     */
+    isReleaseGestureStable(gestureName) {
+        const isReleaseGesture = gestureName === 'CLOSED_FIST' || gestureName === 'ONE_FINGER';
+
+        if (!isReleaseGesture) {
+            this.releaseGestureHoldCount = 0;
+            this.lastReleaseGesture = null;
+            return false;
+        }
+
+        if (gestureName === this.lastReleaseGesture) {
+            this.releaseGestureHoldCount++;
+        } else {
+            this.releaseGestureHoldCount = 1;
+            this.lastReleaseGesture = gestureName;
+        }
+
+        return this.releaseGestureHoldCount >= this.releaseStabilityThreshold;
+    }
+
+    update(currentGesture, landmarks, gestureRecognizer = null, hasHand = true, deltaTime = 0.016) {
         if (!this.targetObject) return;
 
         this.gestureRecognizer = gestureRecognizer;
 
+        // === CENTRALIZED CROSSHAIR VISIBILITY ===
+        // Single authoritative condition: show ONLY when telekinesis ON and HOVERING
+        const showCrosshair = window.TELEKINESIS_MODE === true && this.state === STATE.HOVERING;
+        this.setCrosshairVisible(showCrosshair);
+        if (showCrosshair) {
+            this.setCrosshairColor('yellow');
+        }
+
+        // Check telekinesis mode (if not active, skip processing)
+        if (window.TELEKINESIS_MODE === false) {
+            return;
+        }
+
         // Grab cooldown after throwing
         if (this.grabCooldown > 0) {
-            this.grabCooldown -= 0.016;
+            this.grabCooldown -= deltaTime;
+            // Transition from THROWN to IDLE when cooldown expires
+            if (this.state === STATE.THROWN && this.grabCooldown <= 0) {
+                this.state = STATE.IDLE;
+            }
             return; // Don't process anything during cooldown
+        }
+
+        // === HAND-LOSS GRACE PERIOD ===
+        if (this.state === STATE.GRABBED && !hasHand) {
+            this.handLostTimer += deltaTime;
+
+            if (this.handLostTimer >= this.handLostGraceDuration) {
+                // Grace period expired - drop the object
+                this.dropObject();
+                this.handLostTimer = 0;
+                return;
+            }
+
+            // During grace: keep holding using last valid state
+            this.updateHoldPhysicsWithLastValid(deltaTime);
+            return;
+        } else if (hasHand) {
+            this.handLostTimer = 0;  // Reset timer when hand is present
         }
 
         // Raycast from screen center
@@ -152,7 +235,7 @@ export class LevitationSystem {
         switch (this.state) {
             case STATE.IDLE:
                 this.highlightMesh.material.opacity = 0;
-                this.setCrosshairColor('cyan');
+                // Crosshair handled by centralized logic above
                 this.physics.setLevitating(false);
 
                 if (isLookingAtCube) {
@@ -162,7 +245,7 @@ export class LevitationSystem {
 
             case STATE.HOVERING:
                 this.highlightMesh.material.opacity = 0.5;
-                this.setCrosshairColor('yellow');
+                // Crosshair handled by centralized logic above
 
                 const hoverGestureName = Object.keys(GESTURE).find(k => GESTURE[k] === currentGesture) || 'NONE';
                 const gestureDisplay = document.getElementById('current-gesture-display');
@@ -179,7 +262,7 @@ export class LevitationSystem {
 
             case STATE.GRABBED:
                 this.highlightMesh.material.opacity = 0.8 + Math.sin(Date.now() / 100) * 0.2;
-                this.setCrosshairColor('lime');
+                // Crosshair handled by centralized logic above
 
                 const settings = window.levitationSettings || {};
                 const moveGesture = settings.gestureMove || 'OPEN_HAND';
@@ -190,6 +273,10 @@ export class LevitationSystem {
                 if (gestureDisp) gestureDisp.textContent = currentGestureName;
 
                 if (currentGestureName === moveGesture) {
+                    // Reset release gesture counter when in move gesture
+                    this.releaseGestureHoldCount = 0;
+                    this.lastReleaseGesture = null;
+
                     // Check for throw gesture
                     const wristFlick = this.gestureRecognizer ?
                         this.gestureRecognizer.getWristFlickVelocity() : 0;
@@ -202,31 +289,76 @@ export class LevitationSystem {
                     if (wristFlick > flickThreshold || upwardSwipe) {
                         this.throwObject();
                     } else {
-                        this.updateHoldPhysics(landmarks);
+                        this.updateHoldPhysics(landmarks, deltaTime);
                     }
-                } else if (currentGestureName === dropGesture || currentGestureName === 'ONE_FINGER') {
+                } else if (this.isReleaseGestureStable(currentGestureName)) {
+                    // Only drop if release gesture is stable (5 frames)
                     this.dropObject();
                 } else {
-                    this.updateHoldPhysics(landmarks);
+                    // Continue holding even with unstable release gesture
+                    this.updateHoldPhysics(landmarks, deltaTime);
                 }
                 break;
         }
     }
 
+    /**
+     * Set crosshair visibility with CSS transition support
+     * @param {boolean} visible - Whether crosshair should be visible
+     */
+    setCrosshairVisible(visible) {
+        if (this.crosshairEl) {
+            if (visible) {
+                this.crosshairEl.classList.remove('hidden');
+            } else {
+                this.crosshairEl.classList.add('hidden');
+            }
+        }
+    }
+
     setCrosshairColor(color) {
         if (this.crosshairEl) {
-            const lines = this.crosshairEl.querySelectorAll('div');
-            lines.forEach(line => {
-                line.style.background = color;
-            });
+            // Update bracket stroke color
+            const brackets = this.crosshairEl.querySelectorAll('.bracket-left, .bracket-right');
+            if (brackets.length > 0) {
+                brackets.forEach(bracket => {
+                    bracket.style.borderColor = color;
+                });
+            } else {
+                // Fallback for old crosshair style
+                const lines = this.crosshairEl.querySelectorAll('div');
+                lines.forEach(line => {
+                    line.style.background = color;
+                });
+            }
         }
+    }
+
+    /**
+     * Force disable telekinesis - drop object if holding and reset to IDLE
+     * Called when TELEKINESIS_MODE is toggled OFF
+     */
+    forceDisable() {
+        // If holding, drop the object (not throw)
+        if (this.state === STATE.GRABBED) {
+            this.dropObject();
+        }
+        // Reset to IDLE
+        this.state = STATE.IDLE;
+        this.setCrosshairVisible(false);
+        this.physics.setLevitating(false);
     }
 
     grabObject(landmarks) {
         this.state = STATE.GRABBED;
         this.physics.setLevitating(true);
-        this.physics.setEnabled(true); // Keep physics enabled for wall collisions
+        this.physics.setEnabled(true);
         this.targetObject.material.color.setHex(0x00FFFF);
+
+        // === FIX: Reset camera baseline immediately to prevent aim jump ===
+        if (window.handTrackingSystems?.cameraControl) {
+            window.handTrackingSystems.cameraControl.resetBaseline(landmarks);
+        }
 
         // Calculate actual distance to object
         const objectPos = this.targetObject.position.clone();
@@ -237,65 +369,69 @@ export class LevitationSystem {
         this.targetHoldDistance = this.holdDistance;
         this.baseGrabDistance = this.holdDistance;
 
-        // === FRESH GRAB ANCHORS ===
-        // Capture new anchors at grab moment - do NOT reuse camera mode anchors
+        // Store initial hand for relative movement
         if (landmarks) {
-            const palmCenter = landmarks[9];
-
-            // Store grab anchor position (fresh, independent from camera)
-            this.grabAnchorHandXY = { x: palmCenter.x, y: palmCenter.y };
-            this.grabAnchorDepth = this.calculateHandSize(landmarks);
-            this.grabAnchorCameraYaw = this.camera.rotation.y;
-            this.grabAnchorCameraPitch = this.camera.rotation.x;
-
-            // Also set traditional references
-            this.initialHandX = palmCenter.x;
-            this.initialHandY = palmCenter.y;
             this.initialHandZ = landmarks[9].z;
             this.lastPushPullZ = landmarks[9].z;
         }
 
-        // Zero movement offsets - start fresh
-        this.handOffsetX = 0;
-        this.handOffsetY = 0;
-
         // Clear velocity history
         this.velocityHistory = [];
         this.breakTimer = 0;
-
-        console.log(`Levitation: Object Grabbed at distance ${this.holdDistance.toFixed(1)}!`);
     }
 
     dropObject() {
-        // === ATOMIC RELEASE ===
         this.state = STATE.IDLE;
         this.physics.setLevitating(false);
+        this.targetObject.material.color.setHex(0xFF6600);
+        // Reset release tracking
+        this.releaseGestureHoldCount = 0;
+        this.lastReleaseGesture = null;
+    }
 
-        // Clear aim assist lock
-        if (window.aimAssist) {
-            window.aimAssist.resetLock();
+    /**
+     * Update hold physics during hand-loss grace period (uses last valid state)
+     */
+    updateHoldPhysicsWithLastValid(deltaTime) {
+        // Use last valid camera state instead of current
+        this.targetPosition.copy(this.lastValidCameraPosition)
+            .add(this.lastValidCameraForward.clone().multiplyScalar(this.lastValidHoldDistance));
+
+        // Apply spring-damped force with increased damping (stable hold)
+        const objPos = this.targetObject.position;
+        const error = new THREE.Vector3().subVectors(this.targetPosition, objPos);
+
+        const mass = this.physics.mass;
+        const K = this.springK * mass;
+        const D = (this.baseDampingD + this.stableDampingBonus) * mass;  // Extra damping during grace
+
+        const springForce = error.clone().multiplyScalar(K);
+        const velocity = this.physics.getVelocity();
+        const dampingForce = velocity.clone().multiplyScalar(-D);
+        const totalForce = springForce.add(dampingForce);
+
+        if (totalForce.length() > this.maxForce) {
+            totalForce.normalize().multiplyScalar(this.maxForce);
         }
 
-        // Clear hold references
-        this.resetReferencePoints();
+        this.physics.applyForce(totalForce);
 
-        // Visual feedback
-        this.targetObject.material.color.setHex(0xFF6600);
-
-        // Cooldown to prevent instant re-grab (hysteresis)
-        this.grabCooldown = 0.15; // 150ms
-
-        console.log("Levitation: Object Dropped!");
+        // Auto-stabilize rotation
+        const angVel = this.physics.angularVelocity;
+        const stabilizeTorque = angVel.clone().multiplyScalar(-this.angularD);
+        this.physics.applyTorque(stabilizeTorque);
     }
 
     /**
      * Update hold physics using spring-damped forces
+     * @param {Array} landmarks - Hand landmarks
+     * @param {number} deltaTime - Time since last frame
      */
-    updateHoldPhysics(landmarks) {
+    updateHoldPhysics(landmarks, deltaTime = 0.016) {
         if (!landmarks) return;
 
         // Calculate target position from hand input
-        this.calculateTargetPosition(landmarks);
+        this.calculateTargetPosition(landmarks, deltaTime);
 
         // Track velocity for momentum throw
         const currentVel = this.physics.getVelocity();
@@ -304,14 +440,28 @@ export class LevitationSystem {
             this.velocityHistory.shift();
         }
 
+        // === DYNAMIC DAMPING BASED ON HAND STABILITY ===
+        let dynamicDampingD = this.baseDampingD;
+        if (this.gestureRecognizer) {
+            const vel = this.gestureRecognizer.getVelocity();
+            const handSpeed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
+
+            if (handSpeed < this.handStabilityThreshold) {
+                // Hand is stable - increase damping for steadier hold
+                dynamicDampingD = this.baseDampingD + this.stableDampingBonus;
+            } else if (handSpeed > 0.05) {
+                // Hand is moving fast - reduce damping for responsiveness
+                dynamicDampingD = this.baseDampingD - this.movingDampingReduction;
+            }
+        }
+
         // === SPRING-DAMPED FORCE ===
         const objPos = this.targetObject.position;
         const error = new THREE.Vector3().subVectors(this.targetPosition, objPos);
 
-        // Spring force: F = K * error
         const mass = this.physics.mass;
         const K = this.springK * mass;
-        const D = this.dampingD * mass;
+        const D = dynamicDampingD * mass;
 
         const springForce = error.clone().multiplyScalar(K);
 
@@ -332,18 +482,16 @@ export class LevitationSystem {
 
         // === BREAK CONDITION ===
         if (springForce.length() > this.breakForceThreshold) {
-            this.breakTimer += 0.016;
+            this.breakTimer += deltaTime;
             if (this.breakTimer > this.breakTimeRequired) {
-                console.log("Levitation: Grip broke due to excessive force!");
                 this.dropObject();
                 return;
             }
         } else {
-            this.breakTimer = Math.max(0, this.breakTimer - 0.016);
+            this.breakTimer = Math.max(0, this.breakTimer - deltaTime);
         }
 
         // === AUTO-STABILIZE ROTATION ===
-        // Gently damp angular velocity to stop wobbling
         const angVel = this.physics.angularVelocity;
         const stabilizeTorque = angVel.clone().multiplyScalar(-this.angularD);
         this.physics.applyTorque(stabilizeTorque);
@@ -354,8 +502,10 @@ export class LevitationSystem {
 
     /**
      * Calculate target position from hand input
+     * @param {Array} landmarks - Hand landmarks
+     * @param {number} deltaTime - Time since last frame
      */
-    calculateTargetPosition(landmarks) {
+    calculateTargetPosition(landmarks, deltaTime = 0.016) {
         const palmCenter = landmarks[9];
         const wrist = landmarks[0];
         const middleTip = landmarks[12];
@@ -387,8 +537,7 @@ export class LevitationSystem {
         const targetOffsetY = this.baseOffsetY + deltaY * (xyScale * 0.67);
 
         // Gradual centering - slowly drift toward center while allowing drag offset
-        // This gives the "dragging" feel while the ball eventually settles near crosshair
-        const centeringSpeed = 0.02; // How fast it drifts to center (0.02 = slow drift)
+        const centeringSpeed = 0.02;
         this.handOffsetX = THREE.MathUtils.lerp(this.handOffsetX, targetOffsetX * 0.7, centeringSpeed + Math.abs(deltaX) * 0.5);
         this.handOffsetY = THREE.MathUtils.lerp(this.handOffsetY, targetOffsetY * 0.7, centeringSpeed + Math.abs(deltaY) * 0.5);
 
@@ -417,8 +566,12 @@ export class LevitationSystem {
         this.targetHoldDistance = this.baseGrabDistance + (adjustedDiff * pushPullStrength) + velocityBonus;
         this.targetHoldDistance = Math.max(this.minHoldDistance, Math.min(this.maxHoldDistance, this.targetHoldDistance));
 
-        // Smooth distance interpolation
-        this.holdDistance = THREE.MathUtils.lerp(this.holdDistance, this.targetHoldDistance, 0.1);
+        // === DT-BASED RATE LIMITING FOR HOLD DISTANCE ===
+        // Max change of 8 units/sec instead of fixed lerp
+        const distanceDelta = this.targetHoldDistance - this.holdDistance;
+        const maxDelta = this.maxHoldDistanceRate * deltaTime;
+        const clampedDelta = Math.max(-maxDelta, Math.min(maxDelta, distanceDelta));
+        this.holdDistance += clampedDelta;
 
         // Calculate final target position
         const forward = new THREE.Vector3(0, 0, -1);
@@ -430,30 +583,12 @@ export class LevitationSystem {
         this.targetPosition.copy(this.camera.position)
             .add(forward.multiplyScalar(this.holdDistance));
 
-        this.targetPosition.add(right.multiplyScalar(this.handOffsetX));
-        this.targetPosition.y += this.handOffsetY;
-
-        // === AIM ASSIST - Soft snap toward hoop ===
-        // Apply post-processing nudge when near valid targets
-        if (window.aimAssist && window.basketballHoop) {
-            const hoopCenter = window.basketballHoop.hoopCenter;
-            if (hoopCenter) {
-                // Build candidate targets list
-                const candidates = [
-                    { id: 'hoop', position: hoopCenter }
-                ];
-
-                // Apply aim assist - returns adjusted position
-                const assisted = window.aimAssist.apply(
-                    this.targetPosition,
-                    candidates,
-                    0.016 // deltaTime
-                );
-
-                // Use assisted position
-                this.targetPosition.copy(assisted);
-            }
-        }
+        // === FIX: Object stays exactly on crosshair ray ===
+        // Hand offsets are disabled so object doesn't drift from screen center
+        // Push/pull (holdDistance) still works via hand size delta
+        // To re-enable dragging: uncomment the lines below
+        // this.targetPosition.add(right.multiplyScalar(this.handOffsetX));
+        // this.targetPosition.y += this.handOffsetY;
 
         // === WALL PROJECTION ===
         // Clamp target position to stay inside room bounds
@@ -470,54 +605,10 @@ export class LevitationSystem {
     }
 
     /**
-     * Throw using momentum-based velocity
-     * ATOMIC RELEASE ORDERING: release state FIRST, then apply impulse ONCE
+     * Throw using momentum-based velocity with direction blending
      */
     throwObject() {
-        // =====================================================
-        // 1. ATOMIC RELEASE - Clear hold state FIRST (same frame)
-        // =====================================================
-
-        // a) Change state to IDLE immediately
-        this.state = STATE.IDLE;
-
-        // b) Disable levitation (no more stabilization forces)
-        this.physics.setLevitating(false);
-
-        // c) Clear aim assist lock (runtime only, doesn't affect config)
-        if (window.aimAssist) {
-            window.aimAssist.resetLock();
-        }
-
-        // d) Clear any hold references
-        this.resetReferencePoints();
-
-        // e) Visual feedback
-        this.targetObject.material.color.setHex(0xFF6600);
-
-        // f) Set cooldown to prevent accidental re-grab
-        this.grabCooldown = 0.3;
-
-        // =====================================================
-        // 2. COMPUTE THROW DIRECTION FROM RAW INPUT (not aim-assisted)
-        // =====================================================
-
-        // Use RAW hand velocity from gesture recognizer
-        let throwDirX = 0;
-        let throwDirY = 0;
-        let handSpeed = 0;
-        let wristFlick = 0;
-
-        if (this.gestureRecognizer) {
-            // RAW velocity - NOT aim-assist adjusted
-            const vel = this.gestureRecognizer.getVelocity();
-            handSpeed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
-            throwDirX = -vel.x * 80;
-            throwDirY = -vel.y * 80;
-            wristFlick = this.gestureRecognizer.getWristFlickVelocity();
-        }
-
-        // Calculate average momentum from history
+        // Calculate average velocity from history
         let avgVelocity = new THREE.Vector3(0, 0, 0);
         if (this.velocityHistory.length > 0) {
             for (const vel of this.velocityHistory) {
@@ -526,48 +617,83 @@ export class LevitationSystem {
             avgVelocity.divideScalar(this.velocityHistory.length);
         }
 
-        // Base direction from camera forward (NOT aim-assisted target)
+        // === THROW DIRECTION BLENDING ===
+        // 80% camera forward, 20% hand velocity direction
         const forward = new THREE.Vector3(0, 0, -1);
         forward.applyQuaternion(this.camera.quaternion);
 
-        // Calculate throw speed - slower flick = shorter throw
-        const minThrowSpeed = 2.0;
-        const maxThrowSpeed = 100.0;
-        const wristFlickMultiplier = 500;
-        const handSpeedMultiplier = 250;
+        const right = new THREE.Vector3(1, 0, 0);
+        right.applyQuaternion(this.camera.quaternion);
+
+        const up = new THREE.Vector3(0, 1, 0);
+        up.applyQuaternion(this.camera.quaternion);
+
+        // Get hand velocity and compute camera-space direction
+        let handVelDir = new THREE.Vector3(0, 0, 0);
+        let handSpeed = 0;
+        let wristFlick = 0;
+
+        if (this.gestureRecognizer) {
+            const vel = this.gestureRecognizer.getVelocity();
+            handSpeed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
+            wristFlick = this.gestureRecognizer.getWristFlickVelocity();
+
+            // Convert 2D hand velocity to 3D camera-space direction
+            // Note: MediaPipe X is inverted (mirror image)
+            if (handSpeed > 0.01) {
+                handVelDir.addScaledVector(right, -vel.x);
+                handVelDir.addScaledVector(up, -vel.y);
+                handVelDir.normalize();
+            }
+        }
+
+        // Blend throw direction: 80% forward, 20% hand direction
+        const throwDir = new THREE.Vector3();
+        throwDir.addScaledVector(forward, 0.8);
+        throwDir.addScaledVector(handVelDir, 0.2);
+        throwDir.normalize();
+
+        // === THROW SPEED with min/max limits ===
+        const minThrowSpeed = 8;   // Raised from 2.0 - prevents "drops"
+        const maxThrowSpeed = 45;  // Reduced from 100 - prevents chaos
+        const wristFlickMultiplier = 400;
+        const handSpeedMultiplier = 200;
 
         let throwSpeed = minThrowSpeed +
             (wristFlick * wristFlickMultiplier) +
             (handSpeed * handSpeedMultiplier);
 
-        throwSpeed = Math.min(throwSpeed, maxThrowSpeed);
+        throwSpeed = Math.max(minThrowSpeed, Math.min(maxThrowSpeed, throwSpeed));
 
-        // Momentum bonus from tracked velocity
-        const momentumBonus = avgVelocity.clone().multiplyScalar(0.5);
+        // Add momentum from tracked velocity
+        const momentumBonus = avgVelocity.clone().multiplyScalar(0.3);
 
         // Upward boost for underhand toss
-        let upwardBoost = 8;
+        let upwardBoost = 5;
         if (this.gestureRecognizer) {
             const vel = this.gestureRecognizer.getVelocity();
             if (vel.y < -0.01) {
-                const boostAmount = Math.abs(vel.y) * 300;
-                upwardBoost += boostAmount;
+                upwardBoost += Math.abs(vel.y) * 200;
             }
         }
 
-        // =====================================================
-        // 3. APPLY ONE-SHOT IMPULSE (physics owns object after this)
-        // =====================================================
+        // Apply final velocity along blended throw direction
+        const throwVelocity = throwDir.clone().multiplyScalar(throwSpeed);
+        throwVelocity.y += upwardBoost;
+        throwVelocity.add(momentumBonus);
 
-        const throwVelocity = new THREE.Vector3(
-            forward.x * throwSpeed + throwDirX + momentumBonus.x,
-            forward.y * throwSpeed + throwDirY + upwardBoost + momentumBonus.y,
-            forward.z * throwSpeed + momentumBonus.z
-        );
-
-        // Set velocity ONCE - physics takes over completely after this
         this.physics.setVelocity(throwVelocity.x, throwVelocity.y, throwVelocity.z);
 
-        console.log(`Throw: speed=${throwSpeed.toFixed(1)}, wristFlick=${wristFlick.toFixed(4)}, momentum=${momentumBonus.length().toFixed(1)}`);
+        // Release from levitation - use THROWN state to prevent instant re-grab
+        this.state = STATE.THROWN;
+        this.physics.setLevitating(false);
+        this.targetObject.material.color.setHex(0xFF6600);
+
+        // Set cooldown to prevent accidental re-grab
+        this.grabCooldown = 0.4;
+
+        // Reset release tracking
+        this.releaseGestureHoldCount = 0;
+        this.lastReleaseGesture = null;
     }
 }

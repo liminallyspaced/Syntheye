@@ -1,34 +1,75 @@
 /**
  * CameraControl.js
  * Handles gesture-based camera rotation (Pinch + Drag).
+ * 
+ * FIX HISTORY:
+ * - Changed aim landmark from index tip (8) to palm center (9) to prevent drift during pinch
+ * - Added resetBaseline() for immediate re-anchoring on state transitions
+ * - Implemented dt-stable exponential smoothing
+ * - Added rotation rate clamping
+ * - Increased dead zones and reduced sensitivity
  */
 
 import * as THREE from 'three';
 import { GESTURE } from '../hand-tracking/GestureRecognizer.js';
 
-// Global debug log storage
-window.cameraDebugLogs = [];
-
 export class CameraControl {
     constructor(camera) {
         this.camera = camera;
         this.isControlling = false;
-        this.sensitivity = 1.5;
-        this.deadZone = 0.005;
+
+        // === TUNING PARAMETERS (reduced for less jitter) ===
+        this.sensitivityYaw = 1.0;    // Was 1.5 - radians per normalized unit
+        this.sensitivityPitch = 0.8;  // Lower for pitch to reduce vertical jitter
+
+        // Increased dead zones to filter noise
+        this.deadZoneX = 0.02;  // Was 0.01 - normalized units
+        this.deadZoneY = 0.03;  // Was 0.02 - Y is more sensitive
+
+        // Pitch limits
         this.minPitch = -Math.PI / 2;
         this.maxPitch = Math.PI / 3;
-        this.previousGesture = GESTURE.NONE;
-        this.framesSinceStart = 0;
 
-        // Start values for absolute offset calculation
+        // === DT-STABLE SMOOTHING ===
+        this.smoothingTau = 0.08;  // Time constant in seconds (lower = snappier)
+
+        // === ROTATION RATE CLAMPING (rad/sec) ===
+        this.maxYawRate = 2.0;    // Max yaw change per second
+        this.maxPitchRate = 1.5;  // Max pitch change per second
+
+        // State tracking
+        this.previousGesture = GESTURE.NONE;
+        this.baselineReady = false;  // Immediate baseline flag
+
+        // Baseline values for relative offset
         this.handStartX = undefined;
         this.handStartY = undefined;
         this.cameraStartYaw = undefined;
         this.cameraStartPitch = undefined;
 
-        // Smoothed palm tracking for clean handoffs
-        this.smoothedPalmXY = { x: 0, y: 0 };
-        this.lastPalmXY = { x: 0, y: 0 };
+        // Current smoothed rotation targets
+        this.targetYaw = 0;
+        this.targetPitch = 0;
+    }
+
+    /**
+     * Immediately reset baseline to current hand position.
+     * Called by LevitationSystem on grab to prevent aim jump.
+     * @param {Array} landmarks - Current hand landmarks
+     */
+    resetBaseline(landmarks) {
+        if (landmarks) {
+            // Use palm center (9) for stable reference during pinch
+            const palmCenter = landmarks[9];
+            this.handStartX = palmCenter.x;
+            this.handStartY = palmCenter.y;
+        }
+        this.cameraStartYaw = this.camera.rotation.y;
+        this.cameraStartPitch = this.camera.rotation.x;
+        this.targetYaw = this.camera.rotation.y;
+        this.targetPitch = this.camera.rotation.x;
+        this.baselineReady = true;
+        this.isControlling = true;
     }
 
     blockFor(durationMs) {
@@ -36,34 +77,14 @@ export class CameraControl {
     }
 
     /**
-     * Reset hand anchor to current position - call on exit or when entering grab mode
-     * Prevents camera jump on handoff by zeroing deltas
+     * Update camera rotation based on hand position.
+     * @param {number} currentGesture - Current detected gesture
+     * @param {Array} landmarks - Hand landmarks array
+     * @param {number} dt - Delta time in seconds (from RAF)
+     * @returns {boolean} - Whether camera is being controlled
      */
-    resetHandAnchor(palmXY) {
-        if (palmXY) {
-            this.lastPalmXY = { x: palmXY.x, y: palmXY.y };
-            this.smoothedPalmXY = { x: palmXY.x, y: palmXY.y };
-        }
-        this.handStartX = undefined;
-        this.handStartY = undefined;
-        this.cameraStartYaw = undefined;
-        this.cameraStartPitch = undefined;
-        this.isControlling = false;
-        this.framesSinceStart = 0;
-    }
-
-    update(currentGesture, landmarks, activeMode = 'CAMERA') {
+    update(currentGesture, landmarks, dt = 0.016) {
         const now = Date.now();
-
-        // OWNERSHIP CHECK: Only process if we're the active mode
-        if (activeMode !== 'CAMERA') {
-            // Not our turn - reset state but don't apply any camera movement
-            if (this.isControlling) {
-                this.resetHandAnchor(landmarks ? { x: landmarks[9].x, y: landmarks[9].y } : null);
-            }
-            this.previousGesture = currentGesture;
-            return false;
-        }
 
         // Check cooldown
         if (this.cooldownUntil && now < this.cooldownUntil) {
@@ -72,37 +93,29 @@ export class CameraControl {
             return false;
         }
 
-        // (Aim assist camera lock removed - was causing freezes)
-
-        // Stop camera if gesture is for object manipulation (only THREE_FINGER blocks)
+        // Stop camera if gesture is for object manipulation (THREE_FINGER, TWO_FINGER)
         if (currentGesture === GESTURE.THREE_FINGER ||
             currentGesture === GESTURE.TWO_FINGER) {
 
             if (this.isControlling) {
                 this.isControlling = false;
-                this.framesSinceStart = 0;
+                this.baselineReady = false;
             }
             this.cooldownUntil = now + 300;
             this.previousGesture = currentGesture;
             return false;
         }
 
-        // No cooldown needed between gestures for camera control
-        // Both PINCH and OPEN_HAND should smoothly control camera
-
-        // Handle PINCH or OPEN_HAND for camera control
-        // BUT: if switching from OPEN_HAND to PINCH, reset and re-stabilize
+        // Handle switching from OPEN_HAND to PINCH - short delay
         const switchingFromOpenHandToPinch = this.previousGesture === GESTURE.OPEN_HAND && currentGesture === GESTURE.PINCH;
-
         if (switchingFromOpenHandToPinch) {
-            // CRITICAL: Reset anchors to current position so no jump when resuming
-            this.resetHandAnchor(landmarks ? { x: landmarks[9].x, y: landmarks[9].y } : null);
             this.pinchCooldownUntil = now + 300;
+            this.isControlling = false;
             this.previousGesture = currentGesture;
-            return false; // Don't control camera, but levitation can still grab
+            return false;
         }
 
-        // Skip camera control during pinch cooldown, but when cooldown ends, force re-stabilization
+        // Skip camera control during pinch cooldown
         if (currentGesture === GESTURE.PINCH && this.pinchCooldownUntil && now < this.pinchCooldownUntil) {
             this.previousGesture = currentGesture;
             return false;
@@ -110,83 +123,81 @@ export class CameraControl {
 
         // PINCH and OPEN_HAND control camera
         if ((currentGesture === GESTURE.PINCH || currentGesture === GESTURE.OPEN_HAND) && landmarks) {
-            const handX = landmarks[8].x;
-            const handY = landmarks[8].y;
+            // === FIX: Use palm center (9) instead of index tip (8) ===
+            // Palm center is stable during pinch gesture
+            const palmCenter = landmarks[9];
+            const handX = palmCenter.x;
+            const handY = palmCenter.y;
 
-            // DETECT GESTURE CHANGE or coming out of cooldown - reset baseline to prevent jump
+            // Detect gesture change - need to reset baseline
             const gestureChanged = this.previousGesture !== currentGesture;
-            const comingOutOfCooldown = this.pinchCooldownUntil && now >= this.pinchCooldownUntil;
 
-            // Clear cooldown after we've used it
-            if (comingOutOfCooldown) {
-                this.pinchCooldownUntil = null;
-            }
-
-            // Start tracking if not already OR if gesture changed OR coming out of cooldown
-            if (!this.isControlling || gestureChanged || comingOutOfCooldown) {
-                // ALWAYS reset to current position to prevent jump
+            // Initialize or reset baseline
+            if (!this.baselineReady || gestureChanged) {
+                this.handStartX = handX;
+                this.handStartY = handY;
+                this.cameraStartYaw = this.camera.rotation.y;
+                this.cameraStartPitch = this.camera.rotation.x;
+                this.targetYaw = this.camera.rotation.y;
+                this.targetPitch = this.camera.rotation.x;
+                this.baselineReady = true;
                 this.isControlling = true;
-                this.handStartX = handX;
-                this.handStartY = handY;
-                this.cameraStartYaw = this.camera.rotation.y;
-                this.cameraStartPitch = this.camera.rotation.x;
-                this.framesSinceStart = 0; // Force full re-stabilization
-            }
-
-            this.framesSinceStart++;
-
-            // First 5 frames: capture starting position, NO rotation
-            if (this.framesSinceStart <= 5) {
-                this.handStartX = handX;
-                this.handStartY = handY;
-                this.cameraStartYaw = this.camera.rotation.y;
-                this.cameraStartPitch = this.camera.rotation.x;
-                this.controlStartTime = now;
                 this.previousGesture = currentGesture;
-                window.cameraDebugLogs.push(`STABILIZING (frame ${this.framesSinceStart}) - hand: ${handX.toFixed(3)}, ${handY.toFixed(3)}`);
-                return true; // Don't rotate, just capture
+                // Immediate baseline - no multi-frame delay
+                return true;
             }
 
-            // Frame 6+: Calculate offset and apply rotation
+            // Calculate offset from baseline
             const offsetX = handX - this.handStartX;
             const offsetY = handY - this.handStartY;
 
-            // Larger dead zone to prevent jitter
-            const deadZoneX = 0.01;
-            const deadZoneY = 0.02;
-            let adjX = Math.abs(offsetX) > deadZoneX ? offsetX : 0;
-            let adjY = Math.abs(offsetY) > deadZoneY ? offsetY : 0;
+            // Apply dead zones
+            let adjX = Math.abs(offsetX) > this.deadZoneX ? offsetX : 0;
+            let adjY = Math.abs(offsetY) > this.deadZoneY ? offsetY : 0;
 
-            // Y dampening for first 500ms
-            const yDamp = (now - this.controlStartTime) < 500 ? 0.3 : 1.0;
+            // Calculate raw target rotation
+            const rawTargetYaw = this.cameraStartYaw + (adjX * this.sensitivityYaw);
+            const rawTargetPitch = this.cameraStartPitch - (adjY * this.sensitivityPitch);
 
-            // Calculate TARGET rotation = start + offset (absolute, not incremental)
-            const targetYaw = this.cameraStartYaw + (adjX * this.sensitivity);
-            const targetPitch = this.cameraStartPitch - (adjY * this.sensitivity * yDamp);
+            // === DT-STABLE EXPONENTIAL SMOOTHING ===
+            // alpha = 1 - exp(-dt / tau)
+            const alpha = 1 - Math.exp(-dt / this.smoothingTau);
 
-            // SMOOTH the rotation using lerp (0.15 = smooth, responsive)
-            const smoothFactor = 0.15;
-            const newYaw = this.camera.rotation.y + (targetYaw - this.camera.rotation.y) * smoothFactor;
-            const newPitch = this.camera.rotation.x + (targetPitch - this.camera.rotation.x) * smoothFactor;
+            this.targetYaw = this.targetYaw + (rawTargetYaw - this.targetYaw) * alpha;
+            this.targetPitch = this.targetPitch + (rawTargetPitch - this.targetPitch) * alpha;
 
-            this.camera.rotation.y = newYaw;
-            this.camera.rotation.x = Math.max(this.minPitch, Math.min(this.maxPitch, newPitch));
+            // === ROTATION RATE CLAMPING ===
+            const currentYaw = this.camera.rotation.y;
+            const currentPitch = this.camera.rotation.x;
+
+            let deltaYaw = this.targetYaw - currentYaw;
+            let deltaPitch = this.targetPitch - currentPitch;
+
+            // Clamp to max rate per second, scaled by dt
+            const maxYawDelta = this.maxYawRate * dt;
+            const maxPitchDelta = this.maxPitchRate * dt;
+
+            deltaYaw = Math.max(-maxYawDelta, Math.min(maxYawDelta, deltaYaw));
+            deltaPitch = Math.max(-maxPitchDelta, Math.min(maxPitchDelta, deltaPitch));
+
+            // Apply rotation with clamping
+            this.camera.rotation.y = currentYaw + deltaYaw;
+            this.camera.rotation.x = Math.max(this.minPitch, Math.min(this.maxPitch, currentPitch + deltaPitch));
 
             this.previousGesture = currentGesture;
             return true;
         }
 
-        // Not PINCH - end control
+        // Not a camera control gesture - end control
         if (this.isControlling) {
             this.isControlling = false;
-            this.framesSinceStart = 0;
+            this.baselineReady = false;
             this.handStartX = undefined;
             this.handStartY = undefined;
-            this.cameraStartYaw = undefined;
-            this.cameraStartPitch = undefined;
             this.cooldownUntil = now + 500;
         }
         this.previousGesture = currentGesture;
         return false;
     }
 }
+

@@ -622,7 +622,10 @@ export function updateDebugValues() {
 // HANDLE DEBUG KEY
 // =================================================================================
 export function handleDebugKeydown(event) {
-    // Backtick/tilde toggle removed - debug now controlled by single * key via DebugManager
+    if (event.key === '`' || event.key === '~') {
+        toggleDebugMenu();
+        return true;
+    }
 
     // Free cam keys
     if (freeCamMode) {

@@ -16,6 +16,10 @@ export class HandTracker {
         this.currentGesture = 'NONE';
         this.startButton = null;
 
+        // PHASE 1 FIX: Inference throttling (~18 FPS = 55ms interval)
+        this.lastInferenceTime = 0;
+        this.inferenceInterval = 55; // ms between inferences (18 FPS)
+
         // Setup DOM elements (created dynamically to keep HTML clean)
         this.setupElements();
     }
@@ -77,10 +81,16 @@ export class HandTracker {
 
             this.camera = new window.Camera(this.videoElement, {
                 onFrame: async () => {
+                    // PHASE 1 FIX: Throttle inference to ~18 FPS
+                    const now = performance.now();
+                    if (now - this.lastInferenceTime < this.inferenceInterval) {
+                        return; // Skip this frame
+                    }
+                    this.lastInferenceTime = now;
                     await this.hands.send({ image: this.videoElement });
                 },
-                width: 1280,
-                height: 720
+                width: 640,   // PHASE 1 FIX: Reduced from 1280
+                height: 480   // PHASE 1 FIX: Reduced from 720
             });
             await this.camera.start();
             this.isInitialized = true;

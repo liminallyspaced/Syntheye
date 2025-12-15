@@ -40,7 +40,6 @@ import { toggleInventory, isInventoryOpen } from './inventory.js';
 import { initFlashlight, updateFlashlight, toggleFlashlight } from './flashlight.js';
 import { isPadlockOpen, handlePadlockKeydown, closePadlock } from './padlock.js';
 import { initDebugMenu, updateDebugValues, handleDebugKeydown, handleDebugKeyup } from './debug.js';
-import { debugManager } from './debug/DebugManager.js';
 import { initNarration, showNarration, checkSelfDialogTriggers } from './narration.js';
 import { updateCameraZone, setInitialZone, resetCameraZones, initCameraForRoom } from './camera-zones.js';
 import { initIntro } from './intro.js';
@@ -73,6 +72,9 @@ export function startOverworld() {
         STATE.current_room = 'ROOM_TESTRANGE';
         STATE.player_pos.set(0, 0.05, 8);
 
+        // Enable telekinesis mode for test range
+        window.TELEKINESIS_MODE = true;
+
         // Create test level elements (LevitationBall, etc.)
         createTestLevelElements();
 
@@ -83,6 +85,9 @@ export function startOverworld() {
 
         // Initialize hand tracking systems for test level only
         initHandTracking();
+    } else {
+        // Telekinesis mode off by default outside test range
+        window.TELEKINESIS_MODE = false;
     }
 
     setRoom(STATE.current_room, STATE.player_pos);
@@ -100,21 +105,43 @@ export function startOverworld() {
 // MAIN GAME LOOP
 // =================================================================================
 let gameTime = 0;
+let lastFrameTime = performance.now();
+const MAX_DELTA_TIME = 0.1; // Clamp deltaTime to prevent huge jumps
+
+// =================================================================================
+// PHASE 2 FIX: Shared hand state object
+// MediaPipe callback ONLY updates this. RAF loop reads it for processing.
+// =================================================================================
+window.HAND_STATE = {
+    hasHand: false,
+    landmarks: null,
+    gesture: 'NONE',
+    gestureEnum: null,
+    timestamp: 0,
+    previousGesture: null
+};
+
+// Hand tracking systems (set during init, used in RAF)
+window.handTrackingSystems = null;
 
 function animate() {
     requestAnimationFrame(animate);
-    gameTime += 0.016; // ~60fps
+
+    // PHASE 2 FIX: Compute real deltaTime with clamping
+    const now = performance.now();
+    let deltaTime = (now - lastFrameTime) / 1000; // Convert to seconds
+    deltaTime = Math.min(deltaTime, MAX_DELTA_TIME); // Clamp to prevent huge jumps
+    lastFrameTime = now;
+
+    gameTime += deltaTime;
 
     try {
         if (STATE.interaction_mode === 'OVERWORLD') {
             updatePlayerMovement();
             checkHotspots();
 
-            // Show crosshair in Test Range
-            const crosshair = document.getElementById('crosshair');
-            if (crosshair) {
-                crosshair.classList.toggle('hidden', STATE.current_room !== 'ROOM_TESTRANGE');
-            }
+            // NOTE: Crosshair visibility is now controlled by LevitationSystem
+            // based on levitation state (HOVERING = show, else hide)
         }
 
         // Camera zone lerp system - smooth pan when entering zones
@@ -127,6 +154,79 @@ function animate() {
             // Check for proximity-based self-dialog triggers
             checkSelfDialogTriggers(playerMesh.position);
         }
+
+        // =============================================================
+        // PHASE 2 FIX: Hand tracking updates moved to RAF loop
+        // This ensures physics/camera/levitation are synced with render
+        // =============================================================
+        if (window.handTrackingSystems && STATE.current_room === 'ROOM_TESTRANGE') {
+            const systems = window.handTrackingSystems;
+            const handState = window.HAND_STATE;
+
+            // PHASE 1 FIX: Hard gate - skip ALL processing if no hand detected
+            if (!handState.hasHand) {
+                window.HAND_CAMERA_CONTROL_ACTIVE = false;
+                // Still update physics for gravity/collisions even without hand
+                if (systems.physics) {
+                    systems.physics.update(deltaTime);
+                }
+            } else {
+                // Hand is present - do full processing
+                const gesture = handState.gestureEnum;
+                const landmarks = handState.landmarks;
+                const currentMode = window.getControlMode ? window.getControlMode() : 'A';
+
+                // Update Physics with real deltaTime
+                if (systems.physics) {
+                    systems.physics.update(deltaTime);
+                }
+
+                // Update Basketball Hoop score detection
+                if (systems.basketballHoop && window.levitationCube) {
+                    systems.basketballHoop.update(window.levitationCube);
+                }
+
+                // Update interaction system based on current mode
+                if (currentMode === 'A' && systems.levitationSystem) {
+                    // Update last valid state for hand-loss grace period
+                    if (handState.hasHand) {
+                        systems.levitationSystem.updateLastValidState(camera);
+                    }
+                    // Pass hasHand and deltaTime for new UX improvements
+                    systems.levitationSystem.update(
+                        gesture,
+                        landmarks,
+                        systems.gestureRecognizer,
+                        handState.hasHand,
+                        deltaTime
+                    );
+                } else if (systems.windSystem) {
+                    systems.windSystem.update(gesture, landmarks, systems.gestureRecognizer);
+                }
+
+                // Update Camera control
+                if (systems.cameraControl) {
+                    const GESTURE = systems.GESTURE;
+                    const isCameraGesture = gesture === GESTURE.OPEN_HAND || gesture === GESTURE.PINCH;
+                    const justChangedGesture = handState.gestureEnum !== handState.previousGesture;
+
+                    if (isCameraGesture && !justChangedGesture) {
+                        // Pass deltaTime for dt-stable smoothing
+                        const isHandControllingCamera = systems.cameraControl.update(gesture, landmarks, deltaTime);
+                        window.HAND_CAMERA_CONTROL_ACTIVE = isHandControllingCamera;
+                    } else {
+                        if (currentMode === 'A' && gesture === GESTURE.THREE_FINGER) {
+                            systems.cameraControl.blockFor(200);
+                        }
+                        window.HAND_CAMERA_CONTROL_ACTIVE = false;
+                    }
+                }
+
+                // Update previous gesture for next frame
+                handState.previousGesture = handState.gestureEnum;
+            }
+        }
+
     } catch (error) {
         console.error('GAME LOOP ERROR:', error);
     }
@@ -163,11 +263,22 @@ function animate() {
 // KEYBOARD EVENT HANDLERS
 // =================================================================================
 document.addEventListener('keydown', (event) => {
-    // DEBUG: Log current screen/mode on keypress
-    console.log(`KEY: "${event.key}" | screen="${STATE.screen}" mode="${STATE.interaction_mode}"`);
+    // NOTE: Removed per-keypress console.log for performance (Phase 1 fix)
 
     // Debug menu toggle (works in any mode)
     if (handleDebugKeydown(event)) return;
+
+    // === T KEY: TELEKINESIS MODE TOGGLE (Test Range only) ===
+    if ((event.key === 't' || event.key === 'T') && STATE.current_room === 'ROOM_TESTRANGE') {
+        window.TELEKINESIS_MODE = !window.TELEKINESIS_MODE;
+        console.log(`Telekinesis Mode: ${window.TELEKINESIS_MODE ? 'ON' : 'OFF'}`);
+
+        // If turning OFF and levitation system exists, force disable (drop if holding)
+        if (!window.TELEKINESIS_MODE && window.handTrackingSystems?.levitationSystem) {
+            window.handTrackingSystems.levitationSystem.forceDisable();
+        }
+        return;
+    }
 
     // Video inspection mode takes priority
     if (STATE.interaction_mode === 'INSPECT_VIDEO') {
@@ -261,7 +372,6 @@ document.addEventListener('keydown', (event) => {
             case 's': controls.s = true; break;
             case 'a': controls.a = true; break;
             case 'd': controls.d = true; break;
-            case 'shift': controls.shift = true; break;
             case 'arrowup': controls.w = true; break;
             case 'arrowdown': controls.s = true; break;
             case 'arrowleft': controls.a = true; break;
@@ -331,7 +441,6 @@ document.addEventListener('keyup', (event) => {
             case 's': controls.s = false; break;
             case 'a': controls.a = false; break;
             case 'd': controls.d = false; break;
-            case 'shift': controls.shift = false; break;
             case 'arrowup': controls.w = false; break;
             case 'arrowdown': controls.s = false; break;
             case 'arrowleft': controls.a = false; break;
@@ -365,12 +474,8 @@ window.onload = () => {
     // Initialize inventory UI
     initInventoryUI();
 
-    // Initialize debug menu (camera debug)
+    // Initialize debug menu (press ` to toggle)
     initDebugMenu();
-
-    // Initialize unified debug system (single * key controls all)
-    debugManager.init();
-    window.debugManager = debugManager;
 
     // Initialize narration system
     initNarration();
@@ -522,12 +627,6 @@ window.onload = () => {
         hideMenu('how-to-play-menu');
     });
 
-    // How-to-play menu X close button
-    document.getElementById('btn-close-howto')?.addEventListener('click', () => {
-        SoundManager.playBlip();
-        hideMenu('how-to-play-menu');
-    });
-
     // Bug report menu back button
     document.getElementById('btn-back-bugreport')?.addEventListener('click', () => {
         SoundManager.playBlip();
@@ -631,6 +730,9 @@ window.onload = () => {
 // =================================================================================
 // HAND TRACKING INIT FUNCTION (called only when entering ROOM_TESTRANGE)
 // =================================================================================
+// PHASE 2 FIX: MediaPipe callback now ONLY updates HAND_STATE.
+// All physics/levitation/camera updates happen in RAF loop for sync'd timing.
+// =================================================================================
 function initHandTracking() {
     console.log('Initializing Hand Tracking Systems for Test Range...');
 
@@ -641,257 +743,132 @@ function initHandTracking() {
                     import('./mechanics/CameraControl.js').then(({ CameraControl }) => {
                         import('./mechanics/WindSystem.js').then(({ WindSystem }) => {
                             import('./mechanics/BasketballHoop.js').then(({ BasketballHoop }) => {
-                                import('./mechanics/AimAssist.js').then(({ AimAssist }) => {
 
-                                    // Setup Systems
-                                    const handTracker = new HandTracker();
-                                    const gestureRecognizer = new GestureRecognizer();
+                                // Setup Systems
+                                const handTracker = new HandTracker();
+                                const gestureRecognizer = new GestureRecognizer();
 
-                                    // Wait for window.levitationCube to be ready (from three-init)
-                                    if (window.levitationCube) {
-                                        const physics = new SimplePhysics(window.levitationCube);
-                                        const levitationSystem = new LevitationSystem(scene, camera, window.levitationCube, physics);
-                                        const cameraControl = new CameraControl(camera);
-                                        const windSystem = new WindSystem(scene, camera, window.levitationCube, physics);
-                                        const basketballHoop = new BasketballHoop(scene);
+                                // Wait for window.levitationCube to be ready (from three-init)
+                                if (window.levitationCube) {
+                                    const physics = new SimplePhysics(window.levitationCube);
+                                    const levitationSystem = new LevitationSystem(scene, camera, window.levitationCube, physics);
+                                    const cameraControl = new CameraControl(camera);
+                                    const windSystem = new WindSystem(scene, camera, window.levitationCube, physics);
+                                    const basketballHoop = new BasketballHoop(scene);
 
-                                        // Centralized Aim Assist - POST-PROCESSING ONLY
-                                        const aimAssist = new AimAssist({
-                                            acquireRadius: 1.0,
-                                            releaseRadius: 1.5,
-                                            maxLockMs: 2000,
-                                            maxStrength: 0.15
-                                        });
+                                    // PHASE 2 FIX: Store all systems globally for RAF loop access
+                                    window.handTrackingSystems = {
+                                        handTracker,
+                                        gestureRecognizer,
+                                        physics,
+                                        levitationSystem,
+                                        cameraControl,
+                                        windSystem,
+                                        basketballHoop,
+                                        GESTURE
+                                    };
 
-                                        // Expose to window for debug reset buttons and cleanup
-                                        window.gameCamera = camera;
-                                        window.targetCube = window.levitationCube;
-                                        window.gamePhysics = physics;
-                                        window.basketballHoop = basketballHoop;
-                                        window.handTracker = handTracker;
-                                        window.aimAssist = aimAssist; // For debug panel
+                                    // Expose to window for debug reset buttons and cleanup
+                                    window.gameCamera = camera;
+                                    window.targetCube = window.levitationCube;
+                                    window.gamePhysics = physics;
+                                    window.basketballHoop = basketballHoop;
+                                    window.handTracker = handTracker;
 
-                                        // Wire up scene for debug tracer
-                                        physics.scene = scene;
+                                    // Wire up scene for debug tracer
+                                    physics.scene = scene;
 
-                                        // === POWER MODE ===
-                                        // 'A' = Levitate (active on load)
-                                        // 'B' = Wind (swipe to push, object floats then falls)
-                                        // 'NONE' = No power active
-                                        let currentMode = 'A'; // Start with Levitate active
-                                        const modeTextEl = document.getElementById('mode-text');
-                                        const modeIndicatorEl = document.getElementById('mode-indicator');
-                                        const powerWheelEl = document.getElementById('power-wheel');
+                                    // === MODE TOGGLE ===
+                                    let currentMode = 'A';
+                                    const modeTextEl = document.getElementById('mode-text');
+                                    const modeIndicatorEl = document.getElementById('mode-indicator');
 
-                                        // Track gesture transitions (declared before setActivePower uses them)
-                                        let previousGesture = GESTURE.NONE;
-                                        let transitionCooldownFrames = 0;
-
-                                        // === CENTRALIZED GESTURE CHANGE CALLBACK ===
-                                        // Fires when stabilized gesture changes - coordinate handoffs
-                                        gestureRecognizer.onGestureChangeCallback = (prevGesture, nextGesture) => {
-                                            const palmXY = window.handTracker?.results?.multiHandLandmarks?.[0]?.[9];
-
-                                            // Exiting camera control mode
-                                            if (prevGesture === GESTURE.OPEN_HAND && nextGesture !== GESTURE.OPEN_HAND) {
-                                                cameraControl.resetHandAnchor(palmXY);
-                                            }
-
-                                            // Also reset on PINCH exit (camera was using pinch)
-                                            if (prevGesture === GESTURE.PINCH && nextGesture !== GESTURE.PINCH) {
-                                                cameraControl.resetHandAnchor(palmXY);
-                                            }
-
-                                            console.log(`Gesture: ${Object.keys(GESTURE).find(k => GESTURE[k] === prevGesture)} -> ${Object.keys(GESTURE).find(k => GESTURE[k] === nextGesture)}`);
-                                        };
-
-                                        // === ATOMIC POWER TRANSITION FUNCTION ===
-                                        function setActivePower(newMode) {
-                                            const oldMode = currentMode;
-                                            if (newMode === oldMode) return;
-
-                                            currentMode = newMode;
-
-                                            // 1. Reset aim assist lock (runtime only)
-                                            aimAssist.resetLock();
-
-                                            // 2. Clear gesture cooldowns
-                                            transitionCooldownFrames = 0;
-                                            previousGesture = GESTURE.NONE;
-
-                                            // 3. Update UI
+                                    document.addEventListener('keydown', (e) => {
+                                        if (e.code === 'ControlLeft' || e.code === 'ControlRight') {
+                                            currentMode = currentMode === 'A' ? 'B' : 'A';
                                             if (modeTextEl) {
                                                 if (currentMode === 'A') {
                                                     modeTextEl.textContent = 'MODE A: LEVITATE';
                                                     modeIndicatorEl.style.borderColor = '#00ffff';
                                                     modeTextEl.style.color = '#00ffff';
-                                                } else if (currentMode === 'B') {
+                                                } else {
                                                     modeTextEl.textContent = 'MODE B: WIND';
                                                     modeIndicatorEl.style.borderColor = '#ff00ff';
                                                     modeTextEl.style.color = '#ff00ff';
-                                                } else {
-                                                    modeTextEl.textContent = 'MODE X: NONE';
-                                                    modeIndicatorEl.style.borderColor = '#888888';
-                                                    modeTextEl.style.color = '#888888';
                                                 }
                                             }
+                                        }
+                                    });
 
-                                            // 4. Update wheel selection highlight
-                                            document.querySelectorAll('.wheel-option').forEach(el => {
-                                                el.classList.toggle('selected', el.dataset.power === currentMode);
-                                            });
+                                    window.getControlMode = () => currentMode;
 
-                                            console.log(`Power: ${oldMode} → ${currentMode}`);
+                                    // =====================================================
+                                    // PHASE 2 FIX: MediaPipe callback ONLY updates state
+                                    // No physics, levitation, or camera updates here!
+                                    // =====================================================
+                                    handTracker.init((results) => {
+                                        const hasHand = results.multiHandLandmarks && results.multiHandLandmarks.length > 0;
+
+                                        if (hasHand) {
+                                            const landmarks = results.multiHandLandmarks[0];
+                                            const gesture = gestureRecognizer.recognize(landmarks);
+                                            const gestureName = Object.keys(GESTURE).find(key => GESTURE[key] === gesture) || 'UNKNOWN';
+
+                                            // Update shared state (RAF loop reads this)
+                                            window.HAND_STATE.hasHand = true;
+                                            window.HAND_STATE.landmarks = landmarks;
+                                            window.HAND_STATE.gesture = gestureName;
+                                            window.HAND_STATE.gestureEnum = gesture;
+                                            window.HAND_STATE.timestamp = performance.now();
+
+                                            handTracker.setGesture(gestureName);
+                                        } else {
+                                            // No hand detected
+                                            window.HAND_STATE.hasHand = false;
+                                            window.HAND_STATE.landmarks = null;
+                                            window.HAND_STATE.gesture = 'NONE';
+                                            window.HAND_STATE.gestureEnum = GESTURE.NONE;
+
+                                            handTracker.setGesture('NONE');
                                         }
 
-                                        // === POWER WHEEL - Hold Q to show ===
-                                        let wheelVisible = false;
+                                        // NOTE: All processing now happens in RAF loop!
+                                    });
 
-                                        document.addEventListener('keydown', (e) => {
-                                            if (e.code === 'KeyQ' && !wheelVisible) {
-                                                wheelVisible = true;
-                                                if (powerWheelEl) {
-                                                    powerWheelEl.style.display = 'block';
-                                                    // Highlight current selection
-                                                    document.querySelectorAll('.wheel-option').forEach(el => {
-                                                        el.classList.toggle('selected', el.dataset.power === currentMode);
-                                                    });
-                                                }
-                                            }
-                                        });
+                                    // Dev toggle for debug view
+                                    window.addEventListener('keydown', (e) => {
+                                        if (e.key === 'h') {
+                                            const isHidden = handTracker.canvasElement.style.display === 'none';
+                                            handTracker.toggleDebug(isHidden);
+                                        }
 
-                                        document.addEventListener('keyup', (e) => {
-                                            if (e.code === 'KeyQ') {
-                                                wheelVisible = false;
-                                                if (powerWheelEl) {
-                                                    powerWheelEl.style.display = 'none';
-                                                }
-                                            }
-                                        });
+                                        // Reset cube and level with 'R' key
+                                        if (e.key === 'r' || e.key === 'R') {
+                                            window.levitationCube.position.set(0, 2, -8);
+                                            window.levitationCube.material.color.setHex(0x0000FF);
+                                            physics.resetVelocity();
+                                            physics.setEnabled(true);
+                                        }
+                                    });
 
-                                        // Wheel option click handlers
-                                        document.querySelectorAll('.wheel-option').forEach(el => {
-                                            el.addEventListener('click', () => {
-                                                const power = el.dataset.power;
-                                                if (power) {
-                                                    setActivePower(power);
-                                                }
-                                            });
-                                        });
+                                    // Reset button click handler
+                                    document.getElementById('reset-btn')?.addEventListener('click', () => {
+                                        window.levitationCube.position.set(0, 2, -8);
+                                        window.levitationCube.material.color.setHex(0x0000FF);
+                                        physics.resetVelocity();
+                                        physics.setEnabled(true);
+                                    });
 
-                                        // Expose mode globally for other systems
-                                        window.getControlMode = () => currentMode;
-                                        window.setActivePower = setActivePower;
-
-                                        // Track hand velocity for fast movement detection
-                                        let lastHandY = 0;
-                                        let handVelocityY = 0;
-                                        const VELOCITY_THRESHOLD = 0.02; // If hand moves faster than this, block camera
-
-                                        // Start Hand Tracker
-                                        handTracker.init((results) => {
-                                            // 1. Recognize Gesture
-                                            let gesture = GESTURE.NONE;
-                                            let gestureName = 'NONE';
-                                            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                                                gesture = gestureRecognizer.recognize(results.multiHandLandmarks[0]);
-                                                gestureName = Object.keys(GESTURE).find(key => GESTURE[key] === gesture) || 'UNKNOWN';
-                                            }
-                                            handTracker.setGesture(gestureName);
-
-                                            const landmarks = results.multiHandLandmarks ? results.multiHandLandmarks[0] : null;
-
-                                            // === HAND VELOCITY TRACKING ===
-                                            let handMovingFast = false;
-                                            if (landmarks) {
-                                                const currentHandY = landmarks[8].y; // Index tip Y
-                                                handVelocityY = Math.abs(currentHandY - lastHandY);
-                                                handMovingFast = handVelocityY > VELOCITY_THRESHOLD;
-                                                lastHandY = currentHandY;
-                                            }
-
-                                            // === GESTURE TRANSITION DETECTION ===
-                                            const justChangedGesture = gesture !== previousGesture;
-
-                                            // Add short cooldown only for specific transitions that need it
-                                            // Don't block camera when switching from PINCH to OPEN_HAND (that's grab→control)
-                                            if (justChangedGesture && handMovingFast && gesture !== GESTURE.OPEN_HAND) {
-                                                transitionCooldownFrames = Math.max(transitionCooldownFrames, 3);
-                                                cameraControl.blockFor(200);
-                                            }
-
-                                            // Decrement cooldown
-                                            if (transitionCooldownFrames > 0) {
-                                                transitionCooldownFrames--;
-                                            }
-
-                                            // 2. Update Physics
-                                            physics.update(0.016);
-
-                                            // 2.5 Update Basketball Hoop score detection
-                                            basketballHoop.update(window.levitationCube);
-
-                                            // 3. Update interaction system based on current mode
-                                            if (currentMode === 'A') {
-                                                // Mode A: Levitation (grab/hold/throw)
-                                                levitationSystem.update(gesture, landmarks, gestureRecognizer);
-                                            } else if (currentMode === 'B') {
-                                                // Mode B: Wind (swipe to push, float, fall)
-                                                windSystem.update(gesture, landmarks, gestureRecognizer);
-                                            }
-                                            // Mode NONE: No power active, skip both systems
-
-                                            // 4. Update Camera - both PINCH and OPEN_HAND control camera
-                                            // Skip if in NONE mode (no hand tracking active)
-                                            if (currentMode !== 'NONE') {
-                                                const isCameraGesture = gesture === GESTURE.OPEN_HAND || gesture === GESTURE.PINCH;
-
-                                                const shouldUpdateCamera =
-                                                    transitionCooldownFrames === 0 &&
-                                                    isCameraGesture &&
-                                                    !justChangedGesture;
-
-                                                if (shouldUpdateCamera) {
-                                                    // Determine active mode - LEVITATION if holding object, else CAMERA
-                                                    const isHoldingObject = levitationSystem.state === 'GRABBED';
-                                                    const activeMode = isHoldingObject ? 'LEVITATION' : 'CAMERA';
-
-                                                    const isHandControllingCamera = cameraControl.update(gesture, landmarks, activeMode);
-                                                    window.HAND_CAMERA_CONTROL_ACTIVE = isHandControllingCamera;
-                                                } else {
-                                                    // Only block camera during THREE_FINGER (object grab gesture)
-                                                    if (currentMode === 'A' && gesture === GESTURE.THREE_FINGER) {
-                                                        cameraControl.blockFor(200);
-                                                    }
-                                                    window.HAND_CAMERA_CONTROL_ACTIVE = false;
-                                                }
-                                            }
-
-                                            // Update previous gesture for next frame
-                                            previousGesture = gesture;
-                                        });
-
-                                        // Dev toggle for debug view
-                                        window.addEventListener('keydown', (e) => {
-                                            if (e.key === 'h') {
-                                                const isHidden = handTracker.canvasElement.style.display === 'none';
-                                                handTracker.toggleDebug(isHidden);
-                                                console.log("Hand Tracking Debug:", isHidden ? "ON" : "OFF");
-                                            }
-
-                                            // R key reset removed - now using button in UI
-                                        });
-
-                                        console.log("Hand Tracking Systems Integrated.");
-                                    } else {
-                                        console.error("Levitation Cube not found in scene!");
-                                    }
-                                });
-                            }); // Close AimAssist import
-                        }); // Close BasketballHoop import
+                                    console.log("Hand Tracking Systems Integrated (Phase 2 architecture).");
+                                } else {
+                                    console.error("Levitation Cube not found in scene!");
+                                }
+                            });
+                        });
                     });
                 });
             });
         });
-    }); // Close HandTracker import
+    });
 }
+
