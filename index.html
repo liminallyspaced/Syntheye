@@ -892,33 +892,18 @@ gestureCamera: ${settings.gestureCamera}`;
         <div class="menu-card p-4">
             <h2 class="title-bar text-lg text-white mb-4">DIFFICULTY</h2>
             <div id="difficulty-options" class="space-y-2">
-                <div class="menu-item difficulty-btn" data-difficulty="freeroam" data-index="0">
+                <div class="menu-item difficulty-btn selected" data-difficulty="normal" data-index="0">
                     <span class="selection-arrow mr-4" style="visibility: visible;">►</span>
                     <div class="flex flex-col">
-                        <span class="text-green-400">FREE ROAM</span>
-                        <span class="text-xs text-gray-400">Portfolio mode. All doors unlocked. No puzzles.</span>
-                    </div>
-                </div>
-                <div class="menu-item difficulty-btn" data-difficulty="normal" data-index="1">
-                    <span class="selection-arrow mr-4" style="visibility: hidden;">►</span>
-                    <div class="flex flex-col">
                         <span class="text-yellow-400">NORMAL</span>
-                        <span class="text-xs text-gray-400">Guided experience. Puzzles in each room.</span>
+                        <span class="text-xs text-gray-400">Main game. First-person exploration with puzzles.</span>
                     </div>
                 </div>
-                <div class="menu-item difficulty-btn" data-difficulty="hard" data-index="2">
+                <div class="menu-item difficulty-btn" data-difficulty="testing" data-index="1">
                     <span class="selection-arrow mr-4" style="visibility: hidden;">►</span>
                     <div class="flex flex-col">
-                        <span class="text-red-400">HARD</span>
-                        <span class="text-xs text-gray-400">Survival-horror. Items scattered. Backtracking
-                            required.</span>
-                    </div>
-                </div>
-                <div class="menu-item difficulty-btn" data-difficulty="testing" data-index="3">
-                    <span class="selection-arrow mr-4" style="visibility: hidden;">►</span>
-                    <div class="flex flex-col">
-                        <span class="text-cyan-400">TESTING</span>
-                        <span class="text-xs text-gray-400">Gun Range. Hand-tracking levitation test.</span>
+                        <span class="text-cyan-400">TEST MODE</span>
+                        <span class="text-xs text-gray-400">Levitation sandbox. Fixed camera with hand tracking.</span>
                     </div>
                 </div>
             </div>
@@ -941,7 +926,19 @@ gestureCamera: ${settings.gestureCamera}`;
                 PRESS [E] / [CLICK] TO INTERACT
             </div>
 
-            <!-- Crosshair (Bracket Style) - Visibility controlled by LevitationSystem -->
+            <!-- FPS Crosshair (Simple Dot) - Shown in FPS mode -->
+            <div id="fps-crosshair" class="hidden"
+                style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 50;">
+                <div style="
+                    width: 6px;
+                    height: 6px;
+                    background: rgba(255, 255, 255, 0.8);
+                    border-radius: 50%;
+                    box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+                "></div>
+            </div>
+
+            <!-- Levitation Crosshair (Bracket Style) - Shown in LEVITATION_PUZZLE mode -->
             <div id="crosshair" class="hidden"
                 style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 50; display: flex; align-items: center; gap: 24px; transition: opacity 150ms ease;">
                 <!-- Left Bracket -->

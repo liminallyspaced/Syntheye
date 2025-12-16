@@ -6,7 +6,7 @@
 // =================================================================================
 
 import * as THREE from 'three';
-import { STATE } from './config.js';
+import { STATE, ROOM_DATA } from './config.js';
 import { SoundManager } from './sound.js';
 import {
     setScreen,
@@ -44,6 +44,16 @@ import { initNarration, showNarration, checkSelfDialogTriggers } from './narrati
 import { updateCameraZone, setInitialZone, resetCameraZones, initCameraForRoom } from './camera-zones.js';
 import { initIntro } from './intro.js';
 import { handleVideoInspectKeydown, exitVideoInspect, initializeVideoScreens } from './video-manager.js';
+import {
+    initFPSCamera,
+    updateFPSCamera,
+    enterFPSMode,
+    enterLevitationMode,
+    toggleLevitationMode,
+    exitLevitationMode,
+    isInLevitationZone,
+    checkLevitationZoneExit
+} from './first-person-camera.js';
 
 // =================================================================================
 // MAKE FUNCTIONS AVAILABLE GLOBALLY FOR HTML ONCLICK HANDLERS
@@ -64,41 +74,79 @@ window.returnToMainMenu = returnToMainMenu;
 // START OVERWORLD
 // =================================================================================
 export function startOverworld() {
-    STATE.interaction_mode = 'OVERWORLD';  // Critical: set mode before anything else
+    STATE.interaction_mode = 'OVERWORLD';
     setScreen('overworld-ui');
 
-    // If "testing" difficulty, load the Test Range instead of the default room
+    // If "testing" difficulty, load the Test Range room
     if (STATE.difficulty === 'testing') {
         STATE.current_room = 'ROOM_TESTRANGE';
         STATE.player_pos.set(0, 0.05, 8);
 
-        // Enable telekinesis mode for test range
-        window.TELEKINESIS_MODE = true;
-
         // Create test level elements (LevitationBall, etc.)
         createTestLevelElements();
 
-        // Show test level UI (mode indicator and reset buttons)
-        if (window.showTestLevelUI) {
-            window.showTestLevelUI();
-        }
-
-        // Initialize hand tracking systems for test level only
+        // Initialize hand tracking for gesture-based levitation
         initHandTracking();
-    } else {
-        // Telekinesis mode off by default outside test range
-        window.TELEKINESIS_MODE = false;
     }
 
-    setRoom(STATE.current_room, STATE.player_pos);
+    // Sync legacy player_pos with new STATE.player.position
+    STATE.player.position.copy(STATE.player_pos);
 
-    // Spawn items for the starting room
-    setTimeout(() => {
-        spawnRoomItems(STATE.current_room);
-    }, 100);
+    // Initialize first-person camera controller
+    initFPSCamera();
+
+    // ==========================================================================
+    // DETERMINE MODE *BEFORE* ROOM LOAD (structural fix)
+    // ==========================================================================
+    console.log('========== MODE DETERMINATION ==========');
+    console.log('STATE.current_room =', STATE.current_room);
+    console.log('STATE.difficulty =', STATE.difficulty);
+
+    // Mode must be set before setRoom() so camera positioning gate works correctly
+    if (STATE.current_room === 'ROOM_TESTRANGE') {
+        STATE.cameraMode = 'LEVITATION_PUZZLE';
+        console.log('>>> SET MODE TO LEVITATION_PUZZLE (test range)');
+    } else {
+        STATE.cameraMode = 'FPS';
+        console.log('>>> SET MODE TO FPS (room:', STATE.current_room, ')');
+    }
+    console.log('========================================');
+
+    // ==========================================================================
+    // ROOM-READY CALLBACK (secondary actions only - mode already set)
+    // ==========================================================================
+    const onRoomReady = (roomKey, roomConfig) => {
+        console.log('[DEBUG] onRoomReady:', roomKey, 'mode:', STATE.cameraMode);
+
+        // Spawn items after room is ready
+        spawnRoomItems(roomKey);
+
+        // Secondary actions based on already-set mode (DO NOT SET MODE HERE)
+        if (STATE.cameraMode === 'LEVITATION_PUZZLE') {
+            // Snap camera to levitation position (mode already set above)
+            const testRangeZone = {
+                id: 'testrange_default',
+                cameraPosition: { x: 0, y: 10, z: 12 },
+                cameraTarget: { x: 0, y: 1, z: -5 }
+            };
+            // enterLevitationMode handles camera snap - but mode is already LEVITATION_PUZZLE
+            // Just do the camera snap directly here to avoid re-setting mode
+            camera.position.set(testRangeZone.cameraPosition.x, testRangeZone.cameraPosition.y, testRangeZone.cameraPosition.z);
+            camera.lookAt(testRangeZone.cameraTarget.x, testRangeZone.cameraTarget.y, testRangeZone.cameraTarget.z);
+            STATE.currentLevitationZone = testRangeZone.id;
+            console.log('[DEBUG] Levitation camera snap completed');
+        } else {
+            // FPS mode: set up layers and crosshair (mode already set above)
+            enterFPSMode();
+            console.log('[DEBUG] FPS layers/crosshair set for:', roomKey);
+        }
+    };
+
+    // Load room - setRoom() will respect STATE.cameraMode gate
+    setRoom(STATE.current_room, STATE.player_pos, onRoomReady);
 
     animateInspection();
-    console.log('Overworld started, interaction_mode:', STATE.interaction_mode, 'room:', STATE.current_room);
+    console.log('Overworld started, room:', STATE.current_room, 'mode:', STATE.cameraMode);
 }
 
 // =================================================================================
@@ -137,22 +185,49 @@ function animate() {
 
     try {
         if (STATE.interaction_mode === 'OVERWORLD') {
-            updatePlayerMovement();
+            // Only process movement in FPS mode
+            if (STATE.cameraMode === 'FPS') {
+                updatePlayerMovement();
+            }
             checkHotspots();
 
             // NOTE: Crosshair visibility is now controlled by LevitationSystem
             // based on levitation state (HOVERING = show, else hide)
         }
 
-        // Camera zone lerp system - smooth pan when entering zones
-        if (STATE.interaction_mode === 'OVERWORLD' && playerMesh) {
-            // Updated: Only update zones if Hand Control is NOT overriding it
-            if (!window.HAND_CAMERA_CONTROL_ACTIVE) {
-                updateCameraZone(playerMesh.position);
-            }
+        // =================================================================================
+        // CAMERA MODE HANDLING - Only FPS and LEVITATION_PUZZLE modes exist
+        // =================================================================================
+        let cameraUpdatePath = 'NONE';  // Track which path ran
+        if (STATE.interaction_mode === 'OVERWORLD') {
+            if (STATE.cameraMode === 'FPS') {
+                // First-person camera update - mouse look + position at player head
+                updateFPSCamera();
+                cameraUpdatePath = 'FPS';
 
-            // Check for proximity-based self-dialog triggers
-            checkSelfDialogTriggers(playerMesh.position);
+                // Check for proximity-based self-dialog triggers
+                checkSelfDialogTriggers(STATE.player.position);
+
+                // NOTE: updateCameraZone() is NEVER called in FPS mode
+            } else if (STATE.cameraMode === 'LEVITATION_PUZZLE') {
+                // Camera is locked to zone transform - no updates needed
+                // Check if player somehow left the zone (failsafe - shouldn't happen since movement disabled)
+                checkLevitationZoneExit();
+                cameraUpdatePath = 'LEVITATION';
+            }
+        }
+
+        // =================================================================================
+        // DEBUG: Camera ownership logging (throttled to 1/sec)
+        // =================================================================================
+        if (!window._lastCamLog || now - window._lastCamLog > 1000) {
+            window._lastCamLog = now;
+            const camFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+            console.log(`[CAM] ${cameraUpdatePath} update ran | mode=${STATE.cameraMode} | pos=(${camera.position.x.toFixed(2)}, ${camera.position.y.toFixed(2)}, ${camera.position.z.toFixed(2)}) | fwd=(${camFwd.x.toFixed(2)}, ${camFwd.y.toFixed(2)}, ${camFwd.z.toFixed(2)}) | ptrLock=${!!document.pointerLockElement} | interaction=${STATE.interaction_mode}`);
+
+            if (cameraUpdatePath === 'NONE') {
+                console.warn('[CAM] NO camera update ran (BUG) - mode:', STATE.cameraMode, 'interaction:', STATE.interaction_mode);
+            }
         }
 
         // =============================================================
@@ -187,7 +262,9 @@ function animate() {
                 }
 
                 // Update interaction system based on current mode
-                if (currentMode === 'A' && systems.levitationSystem) {
+                // ONLY update levitation system if in LEVITATION_PUZZLE mode
+                // Mode controller decides when levitation runs - the system just runs
+                if (currentMode === 'A' && systems.levitationSystem && STATE.cameraMode === 'LEVITATION_PUZZLE') {
                     // Update last valid state for hand-loss grace period
                     if (handState.hasHand) {
                         systems.levitationSystem.updateLastValidState(camera);
@@ -268,17 +345,8 @@ document.addEventListener('keydown', (event) => {
     // Debug menu toggle (works in any mode)
     if (handleDebugKeydown(event)) return;
 
-    // === T KEY: TELEKINESIS MODE TOGGLE (Test Range only) ===
-    if ((event.key === 't' || event.key === 'T') && STATE.current_room === 'ROOM_TESTRANGE') {
-        window.TELEKINESIS_MODE = !window.TELEKINESIS_MODE;
-        console.log(`Telekinesis Mode: ${window.TELEKINESIS_MODE ? 'ON' : 'OFF'}`);
-
-        // If turning OFF and levitation system exists, force disable (drop if holding)
-        if (!window.TELEKINESIS_MODE && window.handTrackingSystems?.levitationSystem) {
-            window.handTrackingSystems.levitationSystem.forceDisable();
-        }
-        return;
-    }
+    // NOTE: T key toggle removed - levitation only via E key in zones
+    // Use STATE.cameraMode === 'LEVITATION_PUZZLE' to check levitation state
 
     // Video inspection mode takes priority
     if (STATE.interaction_mode === 'INSPECT_VIDEO') {
@@ -348,8 +416,17 @@ document.addEventListener('keydown', (event) => {
                 SoundManager.playSelect();
                 const selectedBtn = difficultyBtns[selectedIndex];
                 if (selectedBtn) {
-                    STATE.difficulty = selectedBtn.dataset.difficulty;
-                    console.log(`Difficulty set to: ${STATE.difficulty}`);
+                    const difficulty = selectedBtn.dataset.difficulty;
+                    STATE.difficulty = difficulty;
+
+                    // Set room based on difficulty
+                    if (difficulty === 'testing') {
+                        STATE.current_room = 'ROOM_TESTRANGE';
+                    } else {
+                        STATE.current_room = 'ROOM_CONCERT';
+                    }
+
+                    console.log(`Difficulty: ${STATE.difficulty}, Room: ${STATE.current_room}`);
                     startOverworld();
                 }
                 break;
@@ -376,21 +453,48 @@ document.addEventListener('keydown', (event) => {
             case 'arrowdown': controls.s = true; break;
             case 'arrowleft': controls.a = true; break;
             case 'arrowright': controls.d = true; break;
+            case 'shift':
+                // Sprint
+                controls.shift = true;
+                break;
+            case 'control':
+                // Crouch
+                event.preventDefault();
+                controls.ctrl = true;
+                break;
             case 'tab':
                 // Open inventory
                 event.preventDefault();
                 toggleInventory();
                 break;
             case 'e':
-                // Interact with hotspot and play interact animation
+                // First check: if in levitation zone, toggle levitation puzzle mode
+                if (isInLevitationZone() || STATE.cameraMode === 'LEVITATION_PUZZLE') {
+                    if (toggleLevitationMode()) {
+                        SoundManager.playBlip();
+                        break;
+                    }
+                }
+                // Otherwise: Interact with hotspot
                 handleEInteraction();
                 break;
             case ' ':
-                // Jump animation (spacebar)
+                // Jump with physics (in FPS mode)
                 event.preventDefault();
-                playOnceAnimation('Jump');
+                controls.space = true;
+                // Also trigger jump animation if playerMesh exists
+                if (playerMesh) {
+                    playOnceAnimation('Jump');
+                }
                 break;
             case 'escape':
+                // If in levitation puzzle mode, exit it first
+                if (STATE.cameraMode === 'LEVITATION_PUZZLE') {
+                    exitLevitationMode();
+                    SoundManager.playBlip();
+                    break;
+                }
+                // Otherwise: show options menu
                 SoundManager.playBlip();
                 showMenu('options-menu');
                 break;
@@ -445,6 +549,9 @@ document.addEventListener('keyup', (event) => {
             case 'arrowdown': controls.s = false; break;
             case 'arrowleft': controls.a = false; break;
             case 'arrowright': controls.d = false; break;
+            case 'shift': controls.shift = false; break;
+            case 'control': controls.ctrl = false; break;
+            case ' ': controls.space = false; break;
         }
     }
 });
@@ -529,8 +636,17 @@ window.onload = () => {
         btn.addEventListener('click', () => {
             const difficulty = btn.dataset.difficulty;
             STATE.difficulty = difficulty;
+
+            // Set room based on difficulty selection
+            if (difficulty === 'testing') {
+                STATE.current_room = 'ROOM_TESTRANGE';
+            } else {
+                // All other difficulties start in Museum (ROOM_CONCERT)
+                STATE.current_room = 'ROOM_CONCERT';
+            }
+
             SoundManager.playSelect();
-            console.log(`Difficulty set to: ${STATE.difficulty}`);
+            console.log(`Difficulty: ${STATE.difficulty}, Room: ${STATE.current_room}`);
             startOverworld();
         });
 

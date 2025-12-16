@@ -1,22 +1,25 @@
 // =================================================================================
 // --- FLASHLIGHT.JS - Eye-Light System ---
 // =================================================================================
-// Creates a point light around the character plus a visible light cone beam.
-// Toggle with F key. The cone rotates to face the character's direction.
+// Creates a spot light around the character plus a visible light cone beam.
+// Toggle with F key. The cone rotates to face the camera's direction.
+// In FPS mode, follows camera. In third-person, follows playerMesh.
 // =================================================================================
 
 import * as THREE from 'three';
 import { scene, camera, playerMesh } from './three-init.js';
+import { STATE } from './config.js';
+import { hasItem } from './inventory.js';
 
 // =================================================================================
 // FLASHLIGHT STATE
 // =================================================================================
-export let eyeLight = null;           // The actual PointLight for illumination
-export let eyeLightTarget = null;     // Kept for compatibility
+export let eyeLight = null;           // The actual SpotLight for illumination
+export let eyeLightTarget = null;     // Target for spotlight direction
 export let lightConeMesh = null;      // Visible cone beam
 let flashlightOn = false;             // Starts OFF, press F to turn on
 
-// Cone angle for reveal system (PointLight doesn't have angle, so we define it)
+// Cone angle for reveal system
 const CONE_ANGLE = Math.PI / 5;       // ~36 degrees, matching visible cone
 const REVEAL_DISTANCE = 25;           // How far the reveal effect reaches
 
@@ -27,6 +30,13 @@ export let revealableObjects = [];
 // TOGGLE FLASHLIGHT
 // =================================================================================
 export function toggleFlashlight() {
+    // Check if player owns flashlight item (optional gate)
+    // Uncomment to require flashlight item:
+    // if (!hasItem('flashlight')) {
+    //     console.log('Flashlight not owned');
+    //     return false;
+    // }
+
     flashlightOn = !flashlightOn;
     if (eyeLight) {
         eyeLight.visible = flashlightOn;
@@ -76,8 +86,6 @@ export function initFlashlight() {
     eyeLight.userData.ambientGlow = ambientGlow;
 
     // Create visible light cone beam
-    // ConeGeometry(radius, height, radialSegments, heightSegments, openEnded)
-    // Tip is at origin, base expands outward
     const coneHeight = 15;
     const coneRadius = 5;
     const coneGeometry = new THREE.ConeGeometry(coneRadius, coneHeight, 16, 1, true);
@@ -106,45 +114,59 @@ export function initFlashlight() {
 }
 
 // =================================================================================
-// UPDATE FLASHLIGHT - Position light and cone to follow player
+// UPDATE FLASHLIGHT - Position light and cone to follow camera (FPS) or player
 // =================================================================================
 export function updateFlashlight() {
-    if (!eyeLight || !playerMesh) return;
+    if (!eyeLight) return;
 
-    // Get player position and facing direction
-    const playerPos = playerMesh.position;
-    const facingAngle = playerMesh.rotation.y;
+    let lightPos;
+    let facingAngle;
 
-    // Head height (character is about 2 units tall, head is near top)
-    const headHeight = playerPos.y + 2.0;
-
-    // Position the SpotLight at the character's head
-    eyeLight.position.set(playerPos.x, headHeight, playerPos.z);
-
-    // Position ambient glow at player
-    if (eyeLight.userData.ambientGlow) {
-        eyeLight.userData.ambientGlow.position.set(playerPos.x, headHeight, playerPos.z);
+    // Determine source based on camera mode
+    if (STATE.cameraMode === 'FPS') {
+        // FPS mode: flashlight follows camera
+        lightPos = camera.position.clone();
+        facingAngle = STATE.player.yaw;
+    } else if (playerMesh) {
+        // Third-person mode: flashlight follows playerMesh
+        const headHeight = playerMesh.position.y + 2.0;
+        lightPos = new THREE.Vector3(playerMesh.position.x, headHeight, playerMesh.position.z);
+        facingAngle = playerMesh.rotation.y;
+    } else {
+        // Fallback to STATE.player.position
+        const eyeHeight = STATE.player.isCrouching ? STATE.player.crouchHeight : STATE.player.eyeHeight;
+        lightPos = new THREE.Vector3(
+            STATE.player.position.x,
+            STATE.player.position.y + eyeHeight,
+            STATE.player.position.z
+        );
+        facingAngle = STATE.player.yaw;
     }
 
-    // Update spotlight target - point it in the direction the player is facing
+    // Position the SpotLight
+    eyeLight.position.copy(lightPos);
+
+    // Position ambient glow
+    if (eyeLight.userData.ambientGlow) {
+        eyeLight.userData.ambientGlow.position.copy(lightPos);
+    }
+
+    // Update spotlight target - point it in the facing direction
     if (eyeLightTarget) {
         const targetDistance = 20;
         eyeLightTarget.position.set(
-            playerPos.x + Math.sin(facingAngle) * targetDistance,
-            headHeight - 0.5, // Slightly downward angle
-            playerPos.z + Math.cos(facingAngle) * targetDistance
+            lightPos.x + Math.sin(facingAngle) * targetDistance,
+            lightPos.y - 0.5, // Slightly downward angle
+            lightPos.z + Math.cos(facingAngle) * targetDistance
         );
     }
 
     // Position and orient the visible cone mesh
-    // Cone tip starts at head, expands outward in facing direction
     if (lightConeMesh) {
-        // Position cone at character's head (lowered slightly)
-        lightConeMesh.position.set(playerPos.x, headHeight - 0.5, playerPos.z);
+        lightConeMesh.position.copy(lightPos);
+        lightConeMesh.position.y -= 0.5; // Lower slightly
 
-        // Rotate cone to point in the player's facing direction
-        // Default cone points down (-Y), we need to rotate it to point forward
-        // First rotate 90 degrees on X to make it horizontal, then rotate on Y for direction
+        // Rotate cone to point in the facing direction
         lightConeMesh.rotation.set(
             Math.PI / 2,           // Tilt horizontal (tip forward)
             0,                      // No twist

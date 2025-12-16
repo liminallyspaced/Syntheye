@@ -51,8 +51,8 @@ export function initThree() {
     // Dense fog for horror atmosphere
     scene.fog = new THREE.FogExp2(0x0a0808, 0.02);
 
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
-    // Set default camera position (will be overridden by zone system)
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 100);
+    // Set default camera position (will be overridden by FPS camera controller)
     camera.position.set(8, 6, 10);
     camera.rotation.order = 'YXZ';  // CRITICAL: same rotation order as debug free cam uses
     camera.lookAt(0, 1, 0);
@@ -118,6 +118,9 @@ export function initThree() {
     playerMesh.castShadow = true;
     playerMesh.receiveShadow = true;
     scene.add(playerMesh);
+
+    // Expose to window for first-person-camera.js layer-based hiding
+    window.playerMesh = playerMesh;
 
     // 2. Load Custom GLB Character
     // =================================================================================
@@ -213,6 +216,7 @@ function loadCharacterModel(gltf) {
     scene.remove(playerMesh);
     scene.add(model);
     playerMesh = model; // Update global reference so movement controls work
+    window.playerMesh = model; // Keep window reference in sync for layer-based hiding
 
     // Setup animation mixer
     mixer = new THREE.AnimationMixer(model);

@@ -160,18 +160,17 @@ export class LevitationSystem {
 
         this.gestureRecognizer = gestureRecognizer;
 
-        // === CENTRALIZED CROSSHAIR VISIBILITY ===
-        // Single authoritative condition: show ONLY when telekinesis ON and HOVERING
-        const showCrosshair = window.TELEKINESIS_MODE === true && this.state === STATE.HOVERING;
+        // === CROSSHAIR VISIBILITY ===
+        // Show crosshair when HOVERING (seeking target)
+        const showCrosshair = this.state === STATE.HOVERING;
         this.setCrosshairVisible(showCrosshair);
         if (showCrosshair) {
             this.setCrosshairColor('yellow');
         }
 
-        // Check telekinesis mode (if not active, skip processing)
-        if (window.TELEKINESIS_MODE === false) {
-            return;
-        }
+        // NOTE: Mode gating removed - LevitationSystem is camera-agnostic
+        // The mode controller (main.js) decides when to call this update method
+        // This system just runs when called
 
         // Grab cooldown after throwing
         if (this.grabCooldown > 0) {
@@ -336,7 +335,7 @@ export class LevitationSystem {
 
     /**
      * Force disable telekinesis - drop object if holding and reset to IDLE
-     * Called when TELEKINESIS_MODE is toggled OFF
+     * Called when exiting LEVITATION_PUZZLE mode
      */
     forceDisable() {
         // If holding, drop the object (not throw)

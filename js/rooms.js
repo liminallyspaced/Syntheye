@@ -92,8 +92,9 @@ export function loadAllRooms() {
 // Switches to a new room, updates camera, and spawns player
 // @param roomKey - Key from ROOM_DATA (e.g., 'ROOM_HALL')
 // @param spawnPoint - Optional THREE.Vector3 for player spawn position
+// @param onRoomReady - Optional callback fired when room is fully initialized
 // =================================================================================
-export function setRoom(roomKey, spawnPoint = null) {
+export function setRoom(roomKey, spawnPoint = null, onRoomReady = null) {
     console.log(`setRoom called: ${roomKey}`);
     if (currentRoomGroup) scene.remove(currentRoomGroup);
 
@@ -125,12 +126,31 @@ export function setRoom(roomKey, spawnPoint = null) {
 
     STATE.current_room = roomKey;
     const newPos = spawnPoint || roomConfig.spawn;
-    playerMesh.position.copy(newPos);
+
+    // Update legacy player_pos
     STATE.player_pos.copy(newPos);
 
-    // Initialize camera zones for this room
-    resetCameraZones();
-    initCameraForRoom(roomKey, newPos);
+    // Update new STATE.player.position
+    STATE.player.position.copy(newPos);
+
+    // Update playerMesh if it exists
+    if (playerMesh) {
+        playerMesh.position.copy(newPos);
+    }
+
+    // Camera positioning - ONLY in FPS mode (positive check)
+    // Any other mode (levitation, future modes) should not have spawn camera writes
+    if (STATE.cameraMode === 'FPS') {
+        const eyeHeight = STATE.player.isCrouching ? STATE.player.crouchHeight : STATE.player.eyeHeight;
+        camera.position.set(newPos.x, newPos.y + eyeHeight, newPos.z);
+        // Use quaternion for orientation consistency
+        const yawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), STATE.player.yaw);
+        const pitchQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), STATE.player.pitch);
+        camera.quaternion.copy(yawQuat.multiply(pitchQuat));
+        console.log('[setRoom] FPS camera positioned at spawn');
+    } else {
+        console.log('[setRoom] Camera unchanged - mode is:', STATE.cameraMode);
+    }
 
     // Reset movement velocity when entering new room
     STATE.currentSpeed = 0;
@@ -157,6 +177,11 @@ export function setRoom(roomKey, spawnPoint = null) {
 
     // Reset self-dialog triggers so they can fire again
     resetSelfDialogTriggers(roomKey);
+
+    // Fire room-ready callback if provided (for mode transitions, item spawns, etc.)
+    if (onRoomReady) {
+        onRoomReady(roomKey, roomConfig);
+    }
 }
 
 // =================================================================================

@@ -15,24 +15,51 @@ export const STATE = {
     isCrtActive: true,
     current_room: 'ROOM_CONCERT',
     interaction_mode: 'OVERWORLD',
-    difficulty: 'normal',  // 'freeroam', 'normal', 'hard'
-    player_pos: new THREE.Vector3(0, 0.05, 5),  // In front of statue
+    difficulty: 'normal',  // 'freeroam', 'normal', 'hard', 'testing'
+    player_pos: new THREE.Vector3(0, 0.05, 5),  // Legacy - use STATE.player.position
     active_target: null,
     active_hotspot: null,
     clues_found: [false, false, false],
     secret_unlocked: false,
 
-    // Movement settings (slow walking pace)
+    // =================================================================================
+    // PLAYER STATE (First-Person)
+    // =================================================================================
+    player: {
+        position: new THREE.Vector3(0, 0.05, 5),
+        velocity: new THREE.Vector3(0, 0, 0),
+        yaw: 0,              // Horizontal mouse rotation (radians)
+        pitch: 0,            // Vertical mouse rotation (radians)
+        isGrounded: true,
+        isCrouching: false,
+        isRunning: false,
+        eyeHeight: 1.7,
+        crouchHeight: 0.9,
+        walkSpeed: 5.0,
+        runSpeed: 9.0,
+        crouchSpeed: 2.5,
+        jumpVelocity: 8.0,
+        gravity: -25.0
+    },
+
+    // =================================================================================
+    // CAMERA MODE
+    // =================================================================================
+    cameraMode: 'FPS',  // 'FPS' | 'LEVITATION' | 'THIRD_PERSON' | 'CUTSCENE'
+    currentLevitationZone: null,  // Active levitation zone ID when in LEVITATION mode
+
+    // Movement settings (legacy - used by old movement.js)
     speed: 0.03,               // Slow walking speed
     move_tolerance: 0.2,
 
-    // Inertia/weight simulation
-    acceleration: 0.003,       // How fast character speeds up
-    deceleration: 0.006,       // How fast character slows down  
-    currentSpeed: 0,           // Current velocity (starts at 0)
-    moveDelay: 0.01,           // Minimal delay before moving
-    moveDelayTimer: 0,         // Timer for movement delay
+    // Inertia/weight simulation (legacy)
+    acceleration: 0.003,
+    deceleration: 0.006,
+    currentSpeed: 0,
+    moveDelay: 0.01,
+    moveDelayTimer: 0,
 };
+
 
 // =================================================================================
 // PORTFOLIO CONTENT
@@ -303,6 +330,18 @@ export const ROOM_DATA = {
                 radius: 3,
                 dialog: 'Just another poster… or maybe not.',
                 triggered: false
+            }
+        ],
+        // =================================================================================
+        // LEVITATION ZONES - Areas where first-person mode switches to fixed levitation cam
+        // =================================================================================
+        levitationZones: [
+            {
+                id: 'concert_statue_zone',
+                bounds: { x1: -6, x2: 6, z1: -4, z2: 6 },      // Around the central statue
+                cameraPosition: { x: 0, y: 8, z: 12 },         // Fixed camera looking down at statue
+                cameraTarget: { x: 0, y: 1, z: 0 },
+                allowedObjects: ['LevitationBall']             // Objects that can be levitated here
             }
         ],
         group: null,
@@ -1279,6 +1318,16 @@ export const ROOM_DATA = {
         hotspots: [],
         itemSpawns: [],
         selfDialogTriggers: [],
+        // LEVITATION PUZZLE ZONE - player presses E to activate
+        levitationZones: [
+            {
+                id: 'testrange_levitation',
+                bounds: { x1: -10, x2: 10, z1: -15, z2: 5 },  // Area in front of divider wall
+                cameraPosition: { x: 0, y: 10, z: 12 },       // Fixed overhead camera
+                cameraTarget: { x: 0, y: 1, z: -5 },
+                allowedObjects: ['LevitationBall']
+            }
+        ],
         group: null,
         colliders: []
     }
